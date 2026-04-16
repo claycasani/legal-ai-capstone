@@ -21,6 +21,3 @@ milestone1_outputs/
 *.db
 *.sqlite
 *.sqlite3
-
-# optional large local corpora
-legal_corpus/
