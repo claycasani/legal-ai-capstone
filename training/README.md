@@ -28,7 +28,7 @@ Start with one of these, depending on available Hugging Face Space or Colab GPU:
 Use JSONL with one example per line:
 
 ```json
-{"instruction":"Explain the clause in plain English using only the retrieved context.","context":"[Chunk 1] ...","response":"## Clause Summary\n..."}
+{"instruction":"Explain the clause in plain English using only the retrieved context.","context":"[Chunk 1] ...","response":"## What It Says\n..."}
 ```
 
 High-value example types:
@@ -39,11 +39,44 @@ High-value example types:
 - risky or one-sided term detection
 - unanswerable questions where the correct response is to abstain
 
+## Build The First Training Set
+
+Generate a starter dataset from the public corpus:
+
+```bash
+python training/build_lora_dataset.py \
+  --corpus-dir legal_corpus \
+  --output training/generated_lora_examples.jsonl \
+  --max-examples 240
+```
+
+Validate the JSONL before training:
+
+```bash
+python training/validate_lora_dataset.py training/generated_lora_examples.jsonl
+```
+
+Then combine the generated examples with the hand-written seed examples:
+
+```bash
+cat training/seed_lora_examples.jsonl training/generated_lora_examples.jsonl \
+  > training/lora_train.jsonl
+```
+
+The generated dataset is a starting point, not the final gold dataset. The best
+capstone version should manually review and improve examples for:
+
+- rent/payment clauses with exact dollar amounts
+- renewal and termination deadlines
+- one-sided liability or indemnification
+- unanswerable questions
+- bad OCR/PDF extraction cases
+
 ## Training Command
 
 ```bash
 python training/train_lora.py \
-  --dataset training/seed_lora_examples.jsonl \
+  --dataset training/lora_train.jsonl \
   --base-model Qwen/Qwen2.5-7B-Instruct \
   --output-dir models/contract-clarity-lora
 ```
