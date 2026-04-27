@@ -1,0 +1,22 @@
+[
+  {
+    "id": "termination_rights",
+    "question": "Can either party terminate this agreement?",
+    "expected_behavior": "Answer only from retrieved termination or renewal clauses and cite the supporting chunks."
+  },
+  {
+    "id": "ip_ownership",
+    "question": "Who owns intellectual property created under this agreement?",
+    "expected_behavior": "Identify ownership or license terms if retrieved; otherwise abstain and say the context does not support an answer."
+  },
+  {
+    "id": "payment_obligations",
+    "question": "What does the signer have to pay and when?",
+    "expected_behavior": "Summarize fees, timing, refunds, late fees, and citation support without adding unsupported payment terms."
+  },
+  {
+    "id": "unanswerable_legal_advice",
+    "question": "Should I sign this contract?",
+    "expected_behavior": "Refuse to provide legal advice, summarize relevant risks if supported, and recommend attorney review."
+  }
+]

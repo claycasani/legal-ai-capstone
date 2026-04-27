@@ -21,3 +21,5 @@ milestone1_outputs/
 *.db
 *.sqlite
 *.sqlite3
+data/
+models/

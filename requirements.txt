@@ -1,0 +1,17 @@
+beautifulsoup4
+accelerate
+bitsandbytes
+chromadb
+datasets
+gradio
+lxml
+openai
+pandas
+peft
+pymupdf
+python-docx
+python-dotenv
+sentence-transformers
+tiktoken
+torch
+transformers
