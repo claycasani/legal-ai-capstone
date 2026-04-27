@@ -1,0 +1,952 @@
+<html>
+<head>
+<title>Milestone-1.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #f75464;}
+.s2 { color: #bcbec4;}
+.s3 { color: #cf8e6d;}
+.s4 { color: #bcbec4;}
+.s5 { color: #6aab73;}
+.s6 { color: #2aacb8;}
+.s7 { color: #5f826b; font-style: italic;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+Milestone-1.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% 
+</span><span class="s1">!</span><span class="s2">pip install pymupdf pandas tiktoken</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 1 – Imports</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">import </span><span class="s2">os</span>
+<span class="s3">import </span><span class="s2">re</span>
+<span class="s3">import </span><span class="s2">json</span>
+<span class="s3">import </span><span class="s2">sqlite3</span>
+<span class="s3">import </span><span class="s2">traceback</span>
+<span class="s3">from </span><span class="s2">pathlib </span><span class="s3">import </span><span class="s2">Path</span>
+<span class="s3">from </span><span class="s2">statistics </span><span class="s3">import </span><span class="s2">mean</span>
+<span class="s3">from </span><span class="s2">collections </span><span class="s3">import </span><span class="s2">Counter</span><span class="s4">, </span><span class="s2">defaultdict</span>
+
+<span class="s3">import </span><span class="s2">fitz  </span><span class="s0"># PyMuPDF</span>
+<span class="s3">import </span><span class="s2">pandas </span><span class="s3">as </span><span class="s2">pd</span>
+<span class="s3">import </span><span class="s2">tiktoken</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 2A – Colab </span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">from </span><span class="s2">google</span><span class="s4">.</span><span class="s2">colab </span><span class="s3">import </span><span class="s2">files</span>
+
+<span class="s2">uploaded </span><span class="s4">= </span><span class="s2">files</span><span class="s4">.</span><span class="s2">upload</span><span class="s4">()</span>
+
+<span class="s2">pdf_files </span><span class="s4">= [</span><span class="s2">Path</span><span class="s4">(</span><span class="s2">name</span><span class="s4">) </span><span class="s3">for </span><span class="s2">name </span><span class="s3">in </span><span class="s2">uploaded</span><span class="s4">.</span><span class="s2">keys</span><span class="s4">()]</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Uploaded PDF files found: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">pdf_files</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s3">for </span><span class="s2">pdf </span><span class="s3">in </span><span class="s2">pdf_files</span><span class="s4">:</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;-&quot;</span><span class="s4">, </span><span class="s2">pdf</span><span class="s4">.</span><span class="s2">name</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 2B – Local testing without Colab</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">CORPUS_DIR </span><span class="s4">= </span><span class="s2">Path</span><span class="s4">(</span><span class="s5">&quot;..&quot;</span><span class="s4">) / </span><span class="s5">&quot;legal_corpus&quot;</span>
+<span class="s2">pdf_files </span><span class="s4">= </span><span class="s2">sorted</span><span class="s4">(</span><span class="s2">CORPUS_DIR</span><span class="s4">.</span><span class="s2">glob</span><span class="s4">(</span><span class="s5">&quot;*.pdf&quot;</span><span class="s4">))</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Corpus directory: </span><span class="s3">{</span><span class="s2">CORPUS_DIR</span><span class="s4">.</span><span class="s2">resolve</span><span class="s4">()</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;PDF files found: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">pdf_files</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+<span class="s3">for </span><span class="s2">pdf </span><span class="s3">in </span><span class="s2">pdf_files</span><span class="s4">:</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;-&quot;</span><span class="s4">, </span><span class="s2">pdf</span><span class="s4">.</span><span class="s2">name</span><span class="s4">)</span>
+<span class="s0">#%% 
+# For local testing without Colab, you can use this code to read a file path from the user:</span>
+<span class="s5">&quot;&quot;&quot; 
+source_path = input(&quot;Paste the full file path: &quot;).strip() 
+file_name = source_path.split(&quot;/&quot;)[-1] 
+ 
+with open(source_path, &quot;rb&quot;) as f: 
+    file_bytes = f.read() 
+ 
+uploaded = {file_name: file_bytes} 
+ 
+with open(file_name, &quot;wb&quot;) as f: 
+    f.write(file_bytes) 
+&quot;&quot;&quot;</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 3 – Token Counter</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">encoding </span><span class="s4">= </span><span class="s2">tiktoken</span><span class="s4">.</span><span class="s2">get_encoding</span><span class="s4">(</span><span class="s5">&quot;cl100k_base&quot;</span><span class="s4">)</span>
+
+<span class="s3">def </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">text</span><span class="s4">):</span>
+    <span class="s3">return </span><span class="s2">len</span><span class="s4">(</span><span class="s2">encoding</span><span class="s4">.</span><span class="s2">encode</span><span class="s4">(</span><span class="s2">text</span><span class="s4">))</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 3 – Parser</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">import </span><span class="s2">fitz  </span><span class="s0"># PyMuPDF</span>
+<span class="s3">import </span><span class="s2">re</span>
+<span class="s3">from </span><span class="s2">collections </span><span class="s3">import </span><span class="s2">Counter</span>
+
+<span class="s0"># ---------- CLEANING ----------</span>
+<span class="s3">def </span><span class="s2">clean_extracted_text</span><span class="s4">(</span><span class="s2">text</span><span class="s4">):</span>
+    <span class="s2">text </span><span class="s4">= </span><span class="s2">re</span><span class="s4">.</span><span class="s2">sub</span><span class="s4">(</span><span class="s5">r'[ \t]+'</span><span class="s4">, </span><span class="s5">' '</span><span class="s4">, </span><span class="s2">text</span><span class="s4">)</span>
+    <span class="s2">text </span><span class="s4">= </span><span class="s2">re</span><span class="s4">.</span><span class="s2">sub</span><span class="s4">(</span><span class="s5">r'\n{3,}'</span><span class="s4">, </span><span class="s5">'</span><span class="s3">\n\n</span><span class="s5">'</span><span class="s4">, </span><span class="s2">text</span><span class="s4">)</span>
+    <span class="s3">return </span><span class="s2">text</span><span class="s4">.</span><span class="s2">strip</span><span class="s4">()</span>
+
+<span class="s0"># ---------- HEADER/FOOTER REMOVAL ----------</span>
+<span class="s3">def </span><span class="s2">remove_repeated_lines</span><span class="s4">(</span><span class="s2">text</span><span class="s4">, </span><span class="s2">min_repeats</span><span class="s4">=</span><span class="s6">3</span><span class="s4">):</span>
+    <span class="s2">lines </span><span class="s4">= [</span><span class="s2">line</span><span class="s4">.</span><span class="s2">strip</span><span class="s4">() </span><span class="s3">for </span><span class="s2">line </span><span class="s3">in </span><span class="s2">text</span><span class="s4">.</span><span class="s2">splitlines</span><span class="s4">()]</span>
+    <span class="s2">counts </span><span class="s4">= </span><span class="s2">Counter</span><span class="s4">(</span><span class="s2">line </span><span class="s3">for </span><span class="s2">line </span><span class="s3">in </span><span class="s2">lines </span><span class="s3">if </span><span class="s2">line</span><span class="s4">)</span>
+    <span class="s2">repeated </span><span class="s4">= {</span><span class="s2">line </span><span class="s3">for </span><span class="s2">line</span><span class="s4">, </span><span class="s2">c </span><span class="s3">in </span><span class="s2">counts</span><span class="s4">.</span><span class="s2">items</span><span class="s4">() </span><span class="s3">if </span><span class="s2">c </span><span class="s4">&gt;= </span><span class="s2">min_repeats</span><span class="s4">}</span>
+
+    <span class="s2">cleaned_lines </span><span class="s4">= []</span>
+    <span class="s3">for </span><span class="s2">line </span><span class="s3">in </span><span class="s2">lines</span><span class="s4">:</span>
+        <span class="s3">if </span><span class="s2">line </span><span class="s3">in </span><span class="s2">repeated </span><span class="s3">and </span><span class="s2">len</span><span class="s4">(</span><span class="s2">line</span><span class="s4">) &lt; </span><span class="s6">120</span><span class="s4">:</span>
+            <span class="s3">continue</span>
+        <span class="s2">cleaned_lines</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">line</span><span class="s4">)</span>
+
+    <span class="s3">return </span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">cleaned_lines</span><span class="s4">)</span>
+
+<span class="s0"># ---------- MAIN PARSER ----------</span>
+<span class="s3">def </span><span class="s2">parse_pdf</span><span class="s4">(</span><span class="s2">file_path</span><span class="s4">):</span>
+    <span class="s2">doc </span><span class="s4">= </span><span class="s2">fitz</span><span class="s4">.</span><span class="s2">open</span><span class="s4">(</span><span class="s2">str</span><span class="s4">(</span><span class="s2">file_path</span><span class="s4">))</span>
+    <span class="s2">pages </span><span class="s4">= []</span>
+
+    <span class="s3">for </span><span class="s2">page </span><span class="s3">in </span><span class="s2">doc</span><span class="s4">:</span>
+        <span class="s2">page_text </span><span class="s4">= </span><span class="s2">page</span><span class="s4">.</span><span class="s2">get_text</span><span class="s4">(</span><span class="s5">&quot;text&quot;</span><span class="s4">)</span>
+        <span class="s2">pages</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">page_text</span><span class="s4">)</span>
+
+    <span class="s2">full_text </span><span class="s4">= </span><span class="s5">&quot;</span><span class="s3">\n\n</span><span class="s5">&quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">pages</span><span class="s4">)</span>
+    <span class="s2">full_text </span><span class="s4">= </span><span class="s2">clean_extracted_text</span><span class="s4">(</span><span class="s2">full_text</span><span class="s4">)</span>
+    <span class="s2">full_text </span><span class="s4">= </span><span class="s2">remove_repeated_lines</span><span class="s4">(</span><span class="s2">full_text</span><span class="s4">)</span>
+    <span class="s3">return </span><span class="s2">full_text</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 5 – Clause-Aware Chunking (Improved)</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">import </span><span class="s2">re</span>
+
+<span class="s2">CLAUSE_HEADER_PATTERN </span><span class="s4">= </span><span class="s2">re</span><span class="s4">.</span><span class="s2">compile</span><span class="s4">(</span>
+    <span class="s5">r'(?im)^(section\s+\d+(\.\d+)*|article\s+[ivx\d]+|'</span>
+    <span class="s5">r'\d+(\.\d+)*\s+[A-Z][^\n]*|[A-Z][A-Z \-/]{4,})$'</span>
+<span class="s4">)</span>
+
+<span class="s3">def </span><span class="s2">split_into_sections</span><span class="s4">(</span><span class="s2">text</span><span class="s4">):</span>
+    <span class="s2">lines </span><span class="s4">= </span><span class="s2">text</span><span class="s4">.</span><span class="s2">splitlines</span><span class="s4">()</span>
+    <span class="s2">sections </span><span class="s4">= []</span>
+    <span class="s2">current </span><span class="s4">= []</span>
+
+    <span class="s3">for </span><span class="s2">line </span><span class="s3">in </span><span class="s2">lines</span><span class="s4">:</span>
+        <span class="s2">stripped </span><span class="s4">= </span><span class="s2">line</span><span class="s4">.</span><span class="s2">strip</span><span class="s4">()</span>
+        <span class="s3">if </span><span class="s2">CLAUSE_HEADER_PATTERN</span><span class="s4">.</span><span class="s2">match</span><span class="s4">(</span><span class="s2">stripped</span><span class="s4">):</span>
+            <span class="s3">if </span><span class="s2">current</span><span class="s4">:</span>
+                <span class="s2">sections</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">current</span><span class="s4">).</span><span class="s2">strip</span><span class="s4">())</span>
+                <span class="s2">current </span><span class="s4">= []</span>
+        <span class="s2">current</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">line</span><span class="s4">)</span>
+
+    <span class="s3">if </span><span class="s2">current</span><span class="s4">:</span>
+        <span class="s2">sections</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">current</span><span class="s4">).</span><span class="s2">strip</span><span class="s4">())</span>
+
+    <span class="s3">return </span><span class="s4">[</span><span class="s2">s </span><span class="s3">for </span><span class="s2">s </span><span class="s3">in </span><span class="s2">sections </span><span class="s3">if </span><span class="s2">s</span><span class="s4">.</span><span class="s2">strip</span><span class="s4">()]</span>
+
+
+<span class="s3">def </span><span class="s2">build_chunk_from_words</span><span class="s4">(</span><span class="s2">words</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">=</span><span class="s6">800</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">=</span><span class="s6">1000</span><span class="s4">):</span>
+    <span class="s2">chunk_text </span><span class="s4">= </span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">words</span><span class="s4">).</span><span class="s2">strip</span><span class="s4">()</span>
+    <span class="s2">token_count </span><span class="s4">= </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">chunk_text</span><span class="s4">)</span>
+
+    <span class="s3">return </span><span class="s4">{</span>
+        <span class="s5">&quot;text&quot;</span><span class="s4">: </span><span class="s2">chunk_text</span><span class="s4">,</span>
+        <span class="s5">&quot;chunk_index&quot;</span><span class="s4">: </span><span class="s2">chunk_index</span><span class="s4">,</span>
+        <span class="s5">&quot;token_count&quot;</span><span class="s4">: </span><span class="s2">token_count</span><span class="s4">,</span>
+        <span class="s5">&quot;start_char&quot;</span><span class="s4">: </span><span class="s2">char_cursor</span><span class="s4">,</span>
+        <span class="s5">&quot;end_char&quot;</span><span class="s4">: </span><span class="s2">char_cursor </span><span class="s4">+ </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunk_text</span><span class="s4">),</span>
+        <span class="s5">&quot;out_of_range&quot;</span><span class="s4">: </span><span class="s3">not </span><span class="s4">(</span><span class="s2">min_tokens </span><span class="s4">&lt;= </span><span class="s2">token_count </span><span class="s4">&lt;= </span><span class="s2">max_tokens</span><span class="s4">)</span>
+    <span class="s4">}</span>
+
+
+<span class="s3">def </span><span class="s2">trim_to_max_tokens</span><span class="s4">(</span><span class="s2">words</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">):</span>
+    <span class="s2">words </span><span class="s4">= </span><span class="s2">words</span><span class="s4">[:]</span>
+    <span class="s3">while </span><span class="s2">words </span><span class="s3">and </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">words</span><span class="s4">)) &gt; </span><span class="s2">max_tokens</span><span class="s4">:</span>
+        <span class="s2">words</span><span class="s4">.</span><span class="s2">pop</span><span class="s4">()</span>
+    <span class="s3">return </span><span class="s2">words</span>
+
+
+<span class="s3">def </span><span class="s2">get_overlap_words</span><span class="s4">(</span><span class="s2">words</span><span class="s4">, </span><span class="s2">target_overlap_tokens</span><span class="s4">=</span><span class="s6">175</span><span class="s4">):</span>
+    <span class="s2">overlap_words </span><span class="s4">= []</span>
+    <span class="s3">for </span><span class="s2">word </span><span class="s3">in </span><span class="s2">reversed</span><span class="s4">(</span><span class="s2">words</span><span class="s4">):</span>
+        <span class="s2">overlap_words</span><span class="s4">.</span><span class="s2">insert</span><span class="s4">(</span><span class="s6">0</span><span class="s4">, </span><span class="s2">word</span><span class="s4">)</span>
+        <span class="s3">if </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">overlap_words</span><span class="s4">)) &gt;= </span><span class="s2">target_overlap_tokens</span><span class="s4">:</span>
+            <span class="s3">break</span>
+    <span class="s3">return </span><span class="s2">overlap_words</span>
+
+
+<span class="s3">def </span><span class="s2">merge_small_chunks</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">=</span><span class="s6">800</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">=</span><span class="s6">1000</span><span class="s4">):</span>
+    <span class="s7">&quot;&quot;&quot; 
+    Merge undersized chunks with the following chunk when possible. 
+    &quot;&quot;&quot;</span>
+    <span class="s3">if not </span><span class="s2">chunks</span><span class="s4">:</span>
+        <span class="s3">return </span><span class="s2">chunks</span>
+
+    <span class="s2">merged </span><span class="s4">= []</span>
+    <span class="s2">i </span><span class="s4">= </span><span class="s6">0</span>
+
+    <span class="s3">while </span><span class="s2">i </span><span class="s4">&lt; </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">):</span>
+        <span class="s2">current </span><span class="s4">= </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i</span><span class="s4">]</span>
+
+        <span class="s3">if </span><span class="s2">current</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">] &gt;= </span><span class="s2">min_tokens </span><span class="s3">or </span><span class="s2">i </span><span class="s4">== </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">) - </span><span class="s6">1</span><span class="s4">:</span>
+            <span class="s2">merged</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">current</span><span class="s4">)</span>
+            <span class="s2">i </span><span class="s4">+= </span><span class="s6">1</span>
+            <span class="s3">continue</span>
+
+        <span class="s2">nxt </span><span class="s4">= </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i </span><span class="s4">+ </span><span class="s6">1</span><span class="s4">]</span>
+        <span class="s2">combined_text </span><span class="s4">= (</span><span class="s2">current</span><span class="s4">[</span><span class="s5">&quot;text&quot;</span><span class="s4">] + </span><span class="s5">&quot; &quot; </span><span class="s4">+ </span><span class="s2">nxt</span><span class="s4">[</span><span class="s5">&quot;text&quot;</span><span class="s4">]).</span><span class="s2">strip</span><span class="s4">()</span>
+        <span class="s2">combined_tokens </span><span class="s4">= </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">combined_text</span><span class="s4">)</span>
+
+        <span class="s3">if </span><span class="s2">combined_tokens </span><span class="s4">&lt;= </span><span class="s2">max_tokens</span><span class="s4">:</span>
+            <span class="s2">merged_chunk </span><span class="s4">= {</span>
+                <span class="s5">&quot;text&quot;</span><span class="s4">: </span><span class="s2">combined_text</span><span class="s4">,</span>
+                <span class="s5">&quot;chunk_index&quot;</span><span class="s4">: </span><span class="s2">current</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;token_count&quot;</span><span class="s4">: </span><span class="s2">combined_tokens</span><span class="s4">,</span>
+                <span class="s5">&quot;start_char&quot;</span><span class="s4">: </span><span class="s2">current</span><span class="s4">[</span><span class="s5">&quot;start_char&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;end_char&quot;</span><span class="s4">: </span><span class="s2">current</span><span class="s4">[</span><span class="s5">&quot;start_char&quot;</span><span class="s4">] + </span><span class="s2">len</span><span class="s4">(</span><span class="s2">combined_text</span><span class="s4">),</span>
+                <span class="s5">&quot;out_of_range&quot;</span><span class="s4">: </span><span class="s3">not </span><span class="s4">(</span><span class="s2">min_tokens </span><span class="s4">&lt;= </span><span class="s2">combined_tokens </span><span class="s4">&lt;= </span><span class="s2">max_tokens</span><span class="s4">)</span>
+            <span class="s4">}</span>
+            <span class="s2">merged</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">merged_chunk</span><span class="s4">)</span>
+            <span class="s2">i </span><span class="s4">+= </span><span class="s6">2</span>
+        <span class="s3">else</span><span class="s4">:</span>
+            <span class="s2">merged</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">current</span><span class="s4">)</span>
+            <span class="s2">i </span><span class="s4">+= </span><span class="s6">1</span>
+
+    <span class="s3">for </span><span class="s2">idx</span><span class="s4">, </span><span class="s2">chunk </span><span class="s3">in </span><span class="s2">enumerate</span><span class="s4">(</span><span class="s2">merged</span><span class="s4">):</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">] = </span><span class="s2">idx</span>
+
+    <span class="s3">return </span><span class="s2">merged</span>
+
+
+<span class="s3">def </span><span class="s2">split_large_section</span><span class="s4">(</span><span class="s2">section_words</span><span class="s4">, </span><span class="s2">chunk_size</span><span class="s4">=</span><span class="s6">900</span><span class="s4">, </span><span class="s2">overlap</span><span class="s4">=</span><span class="s6">175</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">=</span><span class="s6">800</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">=</span><span class="s6">1000</span><span class="s4">,</span>
+                        <span class="s2">start_chunk_index</span><span class="s4">=</span><span class="s6">0</span><span class="s4">, </span><span class="s2">start_char_cursor</span><span class="s4">=</span><span class="s6">0</span><span class="s4">):</span>
+    <span class="s2">chunks </span><span class="s4">= []</span>
+    <span class="s2">chunk_index </span><span class="s4">= </span><span class="s2">start_chunk_index</span>
+    <span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">start_char_cursor</span>
+    <span class="s2">remaining </span><span class="s4">= </span><span class="s2">section_words</span><span class="s4">[:]</span>
+
+    <span class="s3">while </span><span class="s2">remaining</span><span class="s4">:</span>
+        <span class="s2">candidate </span><span class="s4">= []</span>
+        <span class="s2">i </span><span class="s4">= </span><span class="s6">0</span>
+
+        <span class="s3">while </span><span class="s2">i </span><span class="s4">&lt; </span><span class="s2">len</span><span class="s4">(</span><span class="s2">remaining</span><span class="s4">):</span>
+            <span class="s2">trial </span><span class="s4">= </span><span class="s2">candidate </span><span class="s4">+ [</span><span class="s2">remaining</span><span class="s4">[</span><span class="s2">i</span><span class="s4">]]</span>
+            <span class="s3">if </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">trial</span><span class="s4">)) &lt;= </span><span class="s2">chunk_size</span><span class="s4">:</span>
+                <span class="s2">candidate </span><span class="s4">= </span><span class="s2">trial</span>
+                <span class="s2">i </span><span class="s4">+= </span><span class="s6">1</span>
+            <span class="s3">else</span><span class="s4">:</span>
+                <span class="s3">break</span>
+
+        <span class="s3">if not </span><span class="s2">candidate </span><span class="s3">and </span><span class="s2">remaining</span><span class="s4">:</span>
+            <span class="s2">candidate </span><span class="s4">= [</span><span class="s2">remaining</span><span class="s4">[</span><span class="s6">0</span><span class="s4">]]</span>
+            <span class="s2">i </span><span class="s4">= </span><span class="s6">1</span>
+
+        <span class="s2">candidate </span><span class="s4">= </span><span class="s2">trim_to_max_tokens</span><span class="s4">(</span><span class="s2">candidate</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+
+        <span class="s2">chunk </span><span class="s4">= </span><span class="s2">build_chunk_from_words</span><span class="s4">(</span><span class="s2">candidate</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+        <span class="s2">chunks</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">)</span>
+
+        <span class="s2">chunk_index </span><span class="s4">+= </span><span class="s6">1</span>
+        <span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;end_char&quot;</span><span class="s4">]</span>
+
+        <span class="s2">overlap_words </span><span class="s4">= </span><span class="s2">get_overlap_words</span><span class="s4">(</span><span class="s2">candidate</span><span class="s4">, </span><span class="s2">overlap</span><span class="s4">)</span>
+        <span class="s2">remaining </span><span class="s4">= </span><span class="s2">overlap_words </span><span class="s4">+ </span><span class="s2">remaining</span><span class="s4">[</span><span class="s2">i</span><span class="s4">:]</span>
+
+        <span class="s0"># prevent infinite loop</span>
+        <span class="s3">if </span><span class="s2">len</span><span class="s4">(</span><span class="s2">remaining</span><span class="s4">) == </span><span class="s2">len</span><span class="s4">(</span><span class="s2">overlap_words</span><span class="s4">):</span>
+            <span class="s3">break</span>
+
+    <span class="s3">return </span><span class="s2">chunks</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span>
+
+
+<span class="s3">def </span><span class="s2">chunk_document</span><span class="s4">(</span><span class="s2">text</span><span class="s4">, </span><span class="s2">chunk_size</span><span class="s4">=</span><span class="s6">900</span><span class="s4">, </span><span class="s2">overlap</span><span class="s4">=</span><span class="s6">175</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">=</span><span class="s6">800</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">=</span><span class="s6">1000</span><span class="s4">):</span>
+    <span class="s2">sections </span><span class="s4">= </span><span class="s2">split_into_sections</span><span class="s4">(</span><span class="s2">text</span><span class="s4">)</span>
+
+    <span class="s2">chunks </span><span class="s4">= []</span>
+    <span class="s2">current_words </span><span class="s4">= []</span>
+    <span class="s2">chunk_index </span><span class="s4">= </span><span class="s6">0</span>
+    <span class="s2">char_cursor </span><span class="s4">= </span><span class="s6">0</span>
+
+    <span class="s3">for </span><span class="s2">section </span><span class="s3">in </span><span class="s2">sections</span><span class="s4">:</span>
+        <span class="s2">section_words </span><span class="s4">= </span><span class="s2">section</span><span class="s4">.</span><span class="s2">split</span><span class="s4">()</span>
+        <span class="s2">section_text </span><span class="s4">= </span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">section_words</span><span class="s4">)</span>
+
+        <span class="s3">if </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">section_text</span><span class="s4">) &gt; </span><span class="s2">max_tokens</span><span class="s4">:</span>
+            <span class="s3">if </span><span class="s2">current_words</span><span class="s4">:</span>
+                <span class="s2">current_words </span><span class="s4">= </span><span class="s2">trim_to_max_tokens</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+                <span class="s2">chunk </span><span class="s4">= </span><span class="s2">build_chunk_from_words</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+                <span class="s2">chunks</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">)</span>
+
+                <span class="s2">chunk_index </span><span class="s4">+= </span><span class="s6">1</span>
+                <span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;end_char&quot;</span><span class="s4">]</span>
+                <span class="s2">current_words </span><span class="s4">= </span><span class="s2">get_overlap_words</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">overlap</span><span class="s4">)</span>
+
+            <span class="s2">large_chunks</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">split_large_section</span><span class="s4">(</span>
+                <span class="s2">section_words</span><span class="s4">,</span>
+                <span class="s2">chunk_size</span><span class="s4">=</span><span class="s2">chunk_size</span><span class="s4">,</span>
+                <span class="s2">overlap</span><span class="s4">=</span><span class="s2">overlap</span><span class="s4">,</span>
+                <span class="s2">min_tokens</span><span class="s4">=</span><span class="s2">min_tokens</span><span class="s4">,</span>
+                <span class="s2">max_tokens</span><span class="s4">=</span><span class="s2">max_tokens</span><span class="s4">,</span>
+                <span class="s2">start_chunk_index</span><span class="s4">=</span><span class="s2">chunk_index</span><span class="s4">,</span>
+                <span class="s2">start_char_cursor</span><span class="s4">=</span><span class="s2">char_cursor</span>
+            <span class="s4">)</span>
+            <span class="s2">chunks</span><span class="s4">.</span><span class="s2">extend</span><span class="s4">(</span><span class="s2">large_chunks</span><span class="s4">)</span>
+            <span class="s2">current_words </span><span class="s4">= []</span>
+            <span class="s3">continue</span>
+
+        <span class="s2">trial_words </span><span class="s4">= </span><span class="s2">current_words </span><span class="s4">+ </span><span class="s2">section_words</span>
+        <span class="s2">trial_text </span><span class="s4">= </span><span class="s5">&quot; &quot;</span><span class="s4">.</span><span class="s2">join</span><span class="s4">(</span><span class="s2">trial_words</span><span class="s4">)</span>
+        <span class="s2">trial_tokens </span><span class="s4">= </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">trial_text</span><span class="s4">)</span>
+
+        <span class="s3">if </span><span class="s2">trial_tokens </span><span class="s4">&lt;= </span><span class="s2">chunk_size</span><span class="s4">:</span>
+            <span class="s2">current_words </span><span class="s4">= </span><span class="s2">trial_words</span>
+        <span class="s3">else</span><span class="s4">:</span>
+            <span class="s3">if </span><span class="s2">current_words</span><span class="s4">:</span>
+                <span class="s2">current_words </span><span class="s4">= </span><span class="s2">trim_to_max_tokens</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+                <span class="s2">chunk </span><span class="s4">= </span><span class="s2">build_chunk_from_words</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+                <span class="s2">chunks</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">)</span>
+
+                <span class="s2">chunk_index </span><span class="s4">+= </span><span class="s6">1</span>
+                <span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;end_char&quot;</span><span class="s4">]</span>
+
+                <span class="s2">overlap_words </span><span class="s4">= </span><span class="s2">get_overlap_words</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">overlap</span><span class="s4">)</span>
+                <span class="s2">current_words </span><span class="s4">= </span><span class="s2">overlap_words </span><span class="s4">+ </span><span class="s2">section_words</span>
+            <span class="s3">else</span><span class="s4">:</span>
+                <span class="s2">temp_chunks</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor </span><span class="s4">= </span><span class="s2">split_large_section</span><span class="s4">(</span>
+                    <span class="s2">section_words</span><span class="s4">,</span>
+                    <span class="s2">chunk_size</span><span class="s4">=</span><span class="s2">chunk_size</span><span class="s4">,</span>
+                    <span class="s2">overlap</span><span class="s4">=</span><span class="s2">overlap</span><span class="s4">,</span>
+                    <span class="s2">min_tokens</span><span class="s4">=</span><span class="s2">min_tokens</span><span class="s4">,</span>
+                    <span class="s2">max_tokens</span><span class="s4">=</span><span class="s2">max_tokens</span><span class="s4">,</span>
+                    <span class="s2">start_chunk_index</span><span class="s4">=</span><span class="s2">chunk_index</span><span class="s4">,</span>
+                    <span class="s2">start_char_cursor</span><span class="s4">=</span><span class="s2">char_cursor</span>
+                <span class="s4">)</span>
+                <span class="s2">chunks</span><span class="s4">.</span><span class="s2">extend</span><span class="s4">(</span><span class="s2">temp_chunks</span><span class="s4">)</span>
+                <span class="s2">current_words </span><span class="s4">= []</span>
+
+    <span class="s3">if </span><span class="s2">current_words</span><span class="s4">:</span>
+        <span class="s2">current_words </span><span class="s4">= </span><span class="s2">trim_to_max_tokens</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+        <span class="s2">chunk </span><span class="s4">= </span><span class="s2">build_chunk_from_words</span><span class="s4">(</span><span class="s2">current_words</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">char_cursor</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">)</span>
+        <span class="s2">chunks</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">)</span>
+
+    <span class="s2">chunks </span><span class="s4">= </span><span class="s2">merge_small_chunks</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">, </span><span class="s2">min_tokens</span><span class="s4">=</span><span class="s2">min_tokens</span><span class="s4">, </span><span class="s2">max_tokens</span><span class="s4">=</span><span class="s2">max_tokens</span><span class="s4">)</span>
+    <span class="s3">return </span><span class="s2">chunks</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 6 – Clause Metadata Tagging</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">CLAUSE_PATTERNS </span><span class="s4">= {</span>
+    <span class="s5">&quot;Payment / financial terms&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bpayment\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bpayments\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bpay\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bfee\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bfees\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bcompensation\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\binvoice\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\binvoices\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bbilling\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\brate\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\brates\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bprice\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bpricing\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\breimbursement\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\breimburse\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bexpense\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bexpenses\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bdue\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bdeposit\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Termination / cancellation&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bterminate\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\btermination\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bcancel\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bcancellation\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bexpired\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bexpiration\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bnotice\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bbreach\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Liability / indemnification&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bliability\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bliable\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bindemnify\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bindemnification\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bhold harmless\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bdamages\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\blosses\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bclaims\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;IP ownership / licensing&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bintellectual property\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bownership\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bown\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\blicense\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\blicensing\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bcopyright\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\btrademark\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bpatent\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bwork product\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Confidentiality / non-disclosure&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bconfidential\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bconfidentiality\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bnon[- ]disclosure\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bnda\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bproprietary information\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bdisclosure\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Governing law / jurisdiction&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bgoverning law\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bjurisdiction\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bvenue\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\blaws of\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bcourts of\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Dispute resolution / arbitration&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bdispute\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bdisputes\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\barbitration\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bmediate\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bmediation\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bresolution\b&quot;</span>
+    <span class="s4">],</span>
+    <span class="s5">&quot;Warranties / representations&quot;</span><span class="s4">: [</span>
+        <span class="s5">r&quot;\bwarranty\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bwarranties\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\brepresentation\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\brepresentations\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bguarantee\b&quot;</span><span class="s4">, </span><span class="s5">r&quot;\bguarantees\b&quot;</span><span class="s4">,</span>
+        <span class="s5">r&quot;\bas is\b&quot;</span>
+    <span class="s4">]</span>
+<span class="s4">}</span>
+
+<span class="s3">def </span><span class="s2">tag_clause_metadata</span><span class="s4">(</span><span class="s2">chunk_text</span><span class="s4">):</span>
+    <span class="s2">tags </span><span class="s4">= []</span>
+    <span class="s2">text </span><span class="s4">= </span><span class="s2">chunk_text</span><span class="s4">.</span><span class="s2">lower</span><span class="s4">()</span>
+
+    <span class="s3">for </span><span class="s2">clause_type</span><span class="s4">, </span><span class="s2">patterns </span><span class="s3">in </span><span class="s2">CLAUSE_PATTERNS</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+        <span class="s3">for </span><span class="s2">pattern </span><span class="s3">in </span><span class="s2">patterns</span><span class="s4">:</span>
+            <span class="s3">if </span><span class="s2">re</span><span class="s4">.</span><span class="s2">search</span><span class="s4">(</span><span class="s2">pattern</span><span class="s4">, </span><span class="s2">text</span><span class="s4">, </span><span class="s2">flags</span><span class="s4">=</span><span class="s2">re</span><span class="s4">.</span><span class="s2">IGNORECASE</span><span class="s4">):</span>
+                <span class="s2">tags</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">clause_type</span><span class="s4">)</span>
+                <span class="s3">break</span>
+
+    <span class="s3">return </span><span class="s2">tags</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 7 – Full Corpus Processing Pipeline</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">corpus_results </span><span class="s4">= []</span>
+<span class="s2">pipeline_errors </span><span class="s4">= []</span>
+<span class="s2">parsed_results </span><span class="s4">= {}</span>
+<span class="s2">all_chunks </span><span class="s4">= {}</span>
+<span class="s2">tagged_chunks </span><span class="s4">= []</span>
+
+<span class="s3">for </span><span class="s2">pdf_path </span><span class="s3">in </span><span class="s2">pdf_files</span><span class="s4">:</span>
+    <span class="s2">file_name </span><span class="s4">= </span><span class="s2">pdf_path</span><span class="s4">.</span><span class="s2">name</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;</span><span class="s3">\n</span><span class="s5">Processing: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+    <span class="s3">try</span><span class="s4">:</span>
+        <span class="s0"># 1. Parse</span>
+        <span class="s2">parsed_text </span><span class="s4">= </span><span class="s2">parse_pdf</span><span class="s4">(</span><span class="s2">pdf_path</span><span class="s4">)</span>
+        <span class="s2">parsed_results</span><span class="s4">[</span><span class="s2">file_name</span><span class="s4">] = </span><span class="s2">parsed_text</span>
+
+        <span class="s0"># 2. Chunk</span>
+        <span class="s2">chunks </span><span class="s4">= </span><span class="s2">chunk_document</span><span class="s4">(</span>
+            <span class="s2">parsed_text</span><span class="s4">,</span>
+            <span class="s2">chunk_size</span><span class="s4">=</span><span class="s6">900</span><span class="s4">,</span>
+            <span class="s2">overlap</span><span class="s4">=</span><span class="s6">175</span><span class="s4">,</span>
+            <span class="s2">min_tokens</span><span class="s4">=</span><span class="s6">800</span><span class="s4">,</span>
+            <span class="s2">max_tokens</span><span class="s4">=</span><span class="s6">1000</span>
+        <span class="s4">)</span>
+        <span class="s2">all_chunks</span><span class="s4">[</span><span class="s2">file_name</span><span class="s4">] = </span><span class="s2">chunks</span>
+
+        <span class="s0"># 3. Tag</span>
+        <span class="s2">token_counts </span><span class="s4">= []</span>
+        <span class="s2">out_of_range_count </span><span class="s4">= </span><span class="s6">0</span>
+
+        <span class="s3">for </span><span class="s2">chunk </span><span class="s3">in </span><span class="s2">chunks</span><span class="s4">:</span>
+            <span class="s2">chunk_id </span><span class="s4">= </span><span class="s5">f&quot;</span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">::chunk_</span><span class="s3">{</span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">'chunk_index'</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span>
+
+            <span class="s2">chunk_obj </span><span class="s4">= {</span>
+                <span class="s5">&quot;chunk_id&quot;</span><span class="s4">: </span><span class="s2">chunk_id</span><span class="s4">,</span>
+                <span class="s5">&quot;chunk_text&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;text&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;chunk_index&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+                <span class="s5">&quot;clause_tags&quot;</span><span class="s4">: </span><span class="s2">tag_clause_metadata</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;text&quot;</span><span class="s4">]),</span>
+                <span class="s5">&quot;token_count&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;start_char&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;start_char&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;end_char&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;end_char&quot;</span><span class="s4">],</span>
+                <span class="s5">&quot;out_of_range&quot;</span><span class="s4">: </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">]</span>
+            <span class="s4">}</span>
+
+            <span class="s2">tagged_chunks</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk_obj</span><span class="s4">)</span>
+            <span class="s2">token_counts</span><span class="s4">.</span><span class="s2">append</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">])</span>
+
+            <span class="s3">if </span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">]:</span>
+                <span class="s2">out_of_range_count </span><span class="s4">+= </span><span class="s6">1</span>
+
+        <span class="s2">corpus_results</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+            <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+            <span class="s5">&quot;parse_success&quot;</span><span class="s4">: </span><span class="s3">True</span><span class="s4">,</span>
+            <span class="s5">&quot;character_count&quot;</span><span class="s4">: </span><span class="s2">len</span><span class="s4">(</span><span class="s2">parsed_text</span><span class="s4">),</span>
+            <span class="s5">&quot;num_chunks&quot;</span><span class="s4">: </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">),</span>
+            <span class="s5">&quot;avg_chunk_tokens&quot;</span><span class="s4">: </span><span class="s2">round</span><span class="s4">(</span><span class="s2">mean</span><span class="s4">(</span><span class="s2">token_counts</span><span class="s4">), </span><span class="s6">2</span><span class="s4">) </span><span class="s3">if </span><span class="s2">token_counts </span><span class="s3">else </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;min_chunk_tokens&quot;</span><span class="s4">: </span><span class="s2">min</span><span class="s4">(</span><span class="s2">token_counts</span><span class="s4">) </span><span class="s3">if </span><span class="s2">token_counts </span><span class="s3">else </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;max_chunk_tokens&quot;</span><span class="s4">: </span><span class="s2">max</span><span class="s4">(</span><span class="s2">token_counts</span><span class="s4">) </span><span class="s3">if </span><span class="s2">token_counts </span><span class="s3">else </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;out_of_range_chunks&quot;</span><span class="s4">: </span><span class="s2">out_of_range_count</span><span class="s4">,</span>
+            <span class="s5">&quot;error_message&quot;</span><span class="s4">: </span><span class="s5">&quot;&quot;</span>
+        <span class="s4">})</span>
+
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Finished: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;  Parsed chars: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">parsed_text</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;  Chunks: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;  Avg chunk tokens: </span><span class="s3">{</span><span class="s2">round</span><span class="s4">(</span><span class="s2">mean</span><span class="s4">(</span><span class="s2">token_counts</span><span class="s4">), </span><span class="s6">2</span><span class="s4">) </span><span class="s3">if </span><span class="s2">token_counts </span><span class="s3">else </span><span class="s6">0</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;  Out-of-range chunks: </span><span class="s3">{</span><span class="s2">out_of_range_count</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+    <span class="s3">except </span><span class="s2">Exception </span><span class="s3">as </span><span class="s2">e</span><span class="s4">:</span>
+        <span class="s2">pipeline_errors</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+            <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+            <span class="s5">&quot;error_message&quot;</span><span class="s4">: </span><span class="s2">str</span><span class="s4">(</span><span class="s2">e</span><span class="s4">),</span>
+            <span class="s5">&quot;traceback&quot;</span><span class="s4">: </span><span class="s2">traceback</span><span class="s4">.</span><span class="s2">format_exc</span><span class="s4">()</span>
+        <span class="s4">})</span>
+
+        <span class="s2">corpus_results</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+            <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+            <span class="s5">&quot;parse_success&quot;</span><span class="s4">: </span><span class="s3">False</span><span class="s4">,</span>
+            <span class="s5">&quot;character_count&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;num_chunks&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;avg_chunk_tokens&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;min_chunk_tokens&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;max_chunk_tokens&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;out_of_range_chunks&quot;</span><span class="s4">: </span><span class="s6">0</span><span class="s4">,</span>
+            <span class="s5">&quot;error_message&quot;</span><span class="s4">: </span><span class="s2">str</span><span class="s4">(</span><span class="s2">e</span><span class="s4">)</span>
+        <span class="s4">})</span>
+
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;FAILED: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s2">str</span><span class="s4">(</span><span class="s2">e</span><span class="s4">))</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">Full corpus processing complete.&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Documents found: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">pdf_files</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Documents processed: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">corpus_results</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Successful: </span><span class="s3">{</span><span class="s2">sum</span><span class="s4">(</span><span class="s6">1 </span><span class="s3">for </span><span class="s2">r </span><span class="s3">in </span><span class="s2">corpus_results </span><span class="s3">if </span><span class="s2">r</span><span class="s4">[</span><span class="s5">'parse_success'</span><span class="s4">])</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Failed: </span><span class="s3">{</span><span class="s2">sum</span><span class="s4">(</span><span class="s6">1 </span><span class="s3">for </span><span class="s2">r </span><span class="s3">in </span><span class="s2">corpus_results </span><span class="s3">if not </span><span class="s2">r</span><span class="s4">[</span><span class="s5">'parse_success'</span><span class="s4">])</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total tagged chunks: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">tagged_chunks</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># OPTIONAL – Parsed Text Summary</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">parsed_results </span><span class="s4">= {}</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">text </span><span class="s3">in </span><span class="s2">parsed_results</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;=&quot; </span><span class="s4">* </span><span class="s6">80</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;File: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Character count: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">text</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Word count: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">text</span><span class="s4">.</span><span class="s2">split</span><span class="s4">())</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;=&quot; </span><span class="s4">* </span><span class="s6">80</span><span class="s4">)</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">text </span><span class="s3">in </span><span class="s2">parsed_results</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;</span><span class="s3">\n</span><span class="s5">File: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Character count: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">text</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Word count: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">text</span><span class="s4">.</span><span class="s2">split</span><span class="s4">())</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;-&quot;</span><span class="s4">*</span><span class="s6">50</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># OPTIONAL – Save Parsed Raw Text Outputs</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">from </span><span class="s2">pathlib </span><span class="s3">import </span><span class="s2">Path</span>
+
+
+<span class="s2">OUTPUT_DIR </span><span class="s4">= </span><span class="s2">Path</span><span class="s4">(</span><span class="s5">&quot;milestone1_outputs&quot;</span><span class="s4">)</span>
+<span class="s2">OUTPUT_DIR</span><span class="s4">.</span><span class="s2">mkdir</span><span class="s4">(</span><span class="s2">exist_ok</span><span class="s4">=</span><span class="s3">True</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Output directory:&quot;</span><span class="s4">, </span><span class="s2">OUTPUT_DIR</span><span class="s4">.</span><span class="s2">resolve</span><span class="s4">())</span>
+
+<span class="s2">parsed_dir </span><span class="s4">= </span><span class="s2">Path</span><span class="s4">(</span><span class="s2">OUTPUT_DIR</span><span class="s4">) / </span><span class="s5">&quot;parsed_texts&quot;</span>
+<span class="s2">parsed_dir</span><span class="s4">.</span><span class="s2">mkdir</span><span class="s4">(</span><span class="s2">exist_ok</span><span class="s4">=</span><span class="s3">True</span><span class="s4">)</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">text </span><span class="s3">in </span><span class="s2">parsed_results</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s2">output_name </span><span class="s4">= </span><span class="s2">parsed_dir </span><span class="s4">/ </span><span class="s5">f&quot;</span><span class="s3">{</span><span class="s2">Path</span><span class="s4">(</span><span class="s2">file_name</span><span class="s4">).</span><span class="s2">stem</span><span class="s3">}</span><span class="s5">.txt&quot;</span>
+
+    <span class="s3">with </span><span class="s2">open</span><span class="s4">(</span><span class="s2">output_name</span><span class="s4">, </span><span class="s5">&quot;w&quot;</span><span class="s4">, </span><span class="s2">encoding</span><span class="s4">=</span><span class="s5">&quot;utf-8&quot;</span><span class="s4">) </span><span class="s3">as </span><span class="s2">f</span><span class="s4">:</span>
+        <span class="s2">f</span><span class="s4">.</span><span class="s2">write</span><span class="s4">(</span><span class="s2">text</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Saved parsed text files to: </span><span class="s3">{</span><span class="s2">parsed_dir</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 9 – Save Tagged Chunks to JSONL</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">jsonl_path </span><span class="s4">= </span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">&quot;tagged_chunks.jsonl&quot;</span>
+
+<span class="s3">with </span><span class="s2">open</span><span class="s4">(</span><span class="s2">jsonl_path</span><span class="s4">, </span><span class="s5">&quot;w&quot;</span><span class="s4">, </span><span class="s2">encoding</span><span class="s4">=</span><span class="s5">&quot;utf-8&quot;</span><span class="s4">) </span><span class="s3">as </span><span class="s2">f</span><span class="s4">:</span>
+    <span class="s3">for </span><span class="s2">chunk </span><span class="s3">in </span><span class="s2">tagged_chunks</span><span class="s4">:</span>
+        <span class="s2">f</span><span class="s4">.</span><span class="s2">write</span><span class="s4">(</span><span class="s2">json</span><span class="s4">.</span><span class="s2">dumps</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">, </span><span class="s2">ensure_ascii</span><span class="s4">=</span><span class="s3">False</span><span class="s4">) + </span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Saved JSONL to: </span><span class="s3">{</span><span class="s2">jsonl_path</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total chunk records written: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">tagged_chunks</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 10 – Save Tagged Chunks to SQLite</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">sqlite_path </span><span class="s4">= </span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">&quot;tagged_chunks.db&quot;</span>
+
+<span class="s2">conn </span><span class="s4">= </span><span class="s2">sqlite3</span><span class="s4">.</span><span class="s2">connect</span><span class="s4">(</span><span class="s2">sqlite_path</span><span class="s4">)</span>
+<span class="s2">cur </span><span class="s4">= </span><span class="s2">conn</span><span class="s4">.</span><span class="s2">cursor</span><span class="s4">()</span>
+
+<span class="s2">cur</span><span class="s4">.</span><span class="s2">execute</span><span class="s4">(</span><span class="s5">&quot;DROP TABLE IF EXISTS tagged_chunks&quot;</span><span class="s4">)</span>
+
+<span class="s2">cur</span><span class="s4">.</span><span class="s2">execute</span><span class="s4">(</span><span class="s5">&quot;&quot;&quot; 
+CREATE TABLE tagged_chunks ( 
+    chunk_id TEXT PRIMARY KEY, 
+    source_document TEXT, 
+    chunk_index INTEGER, 
+    chunk_text TEXT, 
+    clause_tags TEXT, 
+    token_count INTEGER, 
+    start_char INTEGER, 
+    end_char INTEGER, 
+    out_of_range INTEGER 
+) 
+&quot;&quot;&quot;</span><span class="s4">)</span>
+
+<span class="s3">for </span><span class="s2">chunk </span><span class="s3">in </span><span class="s2">tagged_chunks</span><span class="s4">:</span>
+    <span class="s2">cur</span><span class="s4">.</span><span class="s2">execute</span><span class="s4">(</span><span class="s5">&quot;&quot;&quot; 
+        INSERT INTO tagged_chunks ( 
+            chunk_id, 
+            source_document, 
+            chunk_index, 
+            chunk_text, 
+            clause_tags, 
+            token_count, 
+            start_char, 
+            end_char, 
+            out_of_range 
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
+    &quot;&quot;&quot;</span><span class="s4">, (</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_id&quot;</span><span class="s4">],</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">],</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_text&quot;</span><span class="s4">],</span>
+        <span class="s2">json</span><span class="s4">.</span><span class="s2">dumps</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;clause_tags&quot;</span><span class="s4">]),</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">],</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;start_char&quot;</span><span class="s4">],</span>
+        <span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;end_char&quot;</span><span class="s4">],</span>
+        <span class="s2">int</span><span class="s4">(</span><span class="s2">chunk</span><span class="s4">[</span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">])</span>
+    <span class="s4">))</span>
+
+<span class="s2">conn</span><span class="s4">.</span><span class="s2">commit</span><span class="s4">()</span>
+<span class="s2">conn</span><span class="s4">.</span><span class="s2">close</span><span class="s4">()</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Saved SQLite DB to: </span><span class="s3">{</span><span class="s2">sqlite_path</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 11 – Save Processing Logs</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">logs_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">corpus_results</span><span class="s4">)</span>
+
+<span class="s2">logs_csv_path </span><span class="s4">= </span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">&quot;processing_logs.csv&quot;</span>
+<span class="s2">logs_json_path </span><span class="s4">= </span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">&quot;processing_logs.json&quot;</span>
+
+<span class="s2">logs_df</span><span class="s4">.</span><span class="s2">to_csv</span><span class="s4">(</span><span class="s2">logs_csv_path</span><span class="s4">, </span><span class="s2">index</span><span class="s4">=</span><span class="s3">False</span><span class="s4">)</span>
+<span class="s2">logs_df</span><span class="s4">.</span><span class="s2">to_json</span><span class="s4">(</span><span class="s2">logs_json_path</span><span class="s4">, </span><span class="s2">orient</span><span class="s4">=</span><span class="s5">&quot;records&quot;</span><span class="s4">, </span><span class="s2">indent</span><span class="s4">=</span><span class="s6">2</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Processing logs saved.&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;CSV log:&quot;</span><span class="s4">, </span><span class="s2">logs_csv_path</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;JSON log:&quot;</span><span class="s4">, </span><span class="s2">logs_json_path</span><span class="s4">)</span>
+
+<span class="s2">display</span><span class="s4">(</span><span class="s2">logs_df</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 12 – Save Pipeline Errors</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">error_log_path </span><span class="s4">= </span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">&quot;pipeline_errors.json&quot;</span>
+
+<span class="s3">with </span><span class="s2">open</span><span class="s4">(</span><span class="s2">error_log_path</span><span class="s4">, </span><span class="s5">&quot;w&quot;</span><span class="s4">, </span><span class="s2">encoding</span><span class="s4">=</span><span class="s5">&quot;utf-8&quot;</span><span class="s4">) </span><span class="s3">as </span><span class="s2">f</span><span class="s4">:</span>
+    <span class="s2">json</span><span class="s4">.</span><span class="s2">dump</span><span class="s4">(</span><span class="s2">pipeline_errors</span><span class="s4">, </span><span class="s2">f</span><span class="s4">, </span><span class="s2">indent</span><span class="s4">=</span><span class="s6">2</span><span class="s4">, </span><span class="s2">ensure_ascii</span><span class="s4">=</span><span class="s3">False</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Saved error log to: </span><span class="s3">{</span><span class="s2">error_log_path</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total errors recorded: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">pipeline_errors</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 13 – QA: Chunk Size Distribution</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">chunk_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">tagged_chunks</span><span class="s4">)</span>
+
+<span class="s3">if </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">) == </span><span class="s6">0</span><span class="s4">:</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;No tagged chunks found.&quot;</span><span class="s4">)</span>
+<span class="s3">else</span><span class="s4">:</span>
+    <span class="s2">in_range_mask </span><span class="s4">= </span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">].</span><span class="s2">between</span><span class="s4">(</span><span class="s6">800</span><span class="s4">, </span><span class="s6">1000</span><span class="s4">)</span>
+    <span class="s2">pct_in_range </span><span class="s4">= </span><span class="s2">round</span><span class="s4">(</span><span class="s2">in_range_mask</span><span class="s4">.</span><span class="s2">mean</span><span class="s4">() * </span><span class="s6">100</span><span class="s4">, </span><span class="s6">2</span><span class="s4">)</span>
+
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Chunk Size QA&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total chunks: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Min token count: </span><span class="s3">{</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">'token_count'</span><span class="s4">].</span><span class="s2">min</span><span class="s4">()</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Max token count: </span><span class="s3">{</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">'token_count'</span><span class="s4">].</span><span class="s2">max</span><span class="s4">()</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Average token count: </span><span class="s3">{</span><span class="s2">round</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">'token_count'</span><span class="s4">].</span><span class="s2">mean</span><span class="s4">(), </span><span class="s6">2</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Chunks in 800–1000 range: </span><span class="s3">{</span><span class="s2">in_range_mask</span><span class="s4">.</span><span class="s2">sum</span><span class="s4">()</span><span class="s3">} </span><span class="s5">/ </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Percent in range: </span><span class="s3">{</span><span class="s2">pct_in_range</span><span class="s3">}</span><span class="s5">%&quot;</span><span class="s4">)</span>
+
+    <span class="s2">display</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">[[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">, </span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">]].</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">))</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 14 – QA: Out-of-Range Chunks</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">out_of_range_df </span><span class="s4">= </span><span class="s2">chunk_df</span><span class="s4">[~</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">].</span><span class="s2">between</span><span class="s4">(</span><span class="s6">800</span><span class="s4">, </span><span class="s6">1000</span><span class="s4">)].</span><span class="s2">copy</span><span class="s4">()</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Out-of-range chunks: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">out_of_range_df</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span><span class="s2">out_of_range_df</span><span class="s4">[[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">, </span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_text&quot;</span><span class="s4">]].</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">))</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 15 – QA: Overlap Check</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">def </span><span class="s2">compute_word_overlap</span><span class="s4">(</span><span class="s2">text_a</span><span class="s4">, </span><span class="s2">text_b</span><span class="s4">, </span><span class="s2">max_check</span><span class="s4">=</span><span class="s6">250</span><span class="s4">):</span>
+    <span class="s2">words_a </span><span class="s4">= </span><span class="s2">text_a</span><span class="s4">.</span><span class="s2">split</span><span class="s4">()</span>
+    <span class="s2">words_b </span><span class="s4">= </span><span class="s2">text_b</span><span class="s4">.</span><span class="s2">split</span><span class="s4">()</span>
+
+    <span class="s2">tail_a </span><span class="s4">= </span><span class="s2">words_a</span><span class="s4">[-</span><span class="s2">max_check</span><span class="s4">:]</span>
+    <span class="s2">head_b </span><span class="s4">= </span><span class="s2">words_b</span><span class="s4">[:</span><span class="s2">max_check</span><span class="s4">]</span>
+
+    <span class="s2">best </span><span class="s4">= </span><span class="s6">0</span>
+    <span class="s2">max_possible </span><span class="s4">= </span><span class="s2">min</span><span class="s4">(</span><span class="s2">len</span><span class="s4">(</span><span class="s2">tail_a</span><span class="s4">), </span><span class="s2">len</span><span class="s4">(</span><span class="s2">head_b</span><span class="s4">))</span>
+
+    <span class="s3">for </span><span class="s2">k </span><span class="s3">in </span><span class="s2">range</span><span class="s4">(</span><span class="s6">1</span><span class="s4">, </span><span class="s2">max_possible </span><span class="s4">+ </span><span class="s6">1</span><span class="s4">):</span>
+        <span class="s3">if </span><span class="s2">tail_a</span><span class="s4">[-</span><span class="s2">k</span><span class="s4">:] == </span><span class="s2">head_b</span><span class="s4">[:</span><span class="s2">k</span><span class="s4">]:</span>
+            <span class="s2">best </span><span class="s4">= </span><span class="s2">k</span>
+    <span class="s3">return </span><span class="s2">best</span>
+
+<span class="s2">overlap_rows </span><span class="s4">= []</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">chunks </span><span class="s3">in </span><span class="s2">all_chunks</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s3">for </span><span class="s2">i </span><span class="s3">in </span><span class="s2">range</span><span class="s4">(</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">) - </span><span class="s6">1</span><span class="s4">):</span>
+        <span class="s2">overlap_count </span><span class="s4">= </span><span class="s2">compute_word_overlap</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i</span><span class="s4">][</span><span class="s5">&quot;text&quot;</span><span class="s4">], </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i </span><span class="s4">+ </span><span class="s6">1</span><span class="s4">][</span><span class="s5">&quot;text&quot;</span><span class="s4">], </span><span class="s2">max_check</span><span class="s4">=</span><span class="s6">250</span><span class="s4">)</span>
+        <span class="s2">overlap_rows</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+            <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+            <span class="s5">&quot;chunk_index_a&quot;</span><span class="s4">: </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i</span><span class="s4">][</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+            <span class="s5">&quot;chunk_index_b&quot;</span><span class="s4">: </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">i </span><span class="s4">+ </span><span class="s6">1</span><span class="s4">][</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+            <span class="s5">&quot;measured_overlap_tokens&quot;</span><span class="s4">: </span><span class="s2">overlap_count</span>
+        <span class="s4">})</span>
+
+<span class="s2">overlap_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">overlap_rows</span><span class="s4">)</span>
+
+<span class="s3">if </span><span class="s2">len</span><span class="s4">(</span><span class="s2">overlap_df</span><span class="s4">) == </span><span class="s6">0</span><span class="s4">:</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;No overlap data available.&quot;</span><span class="s4">)</span>
+<span class="s3">else</span><span class="s4">:</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Overlap QA&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Average measured overlap: </span><span class="s3">{</span><span class="s2">round</span><span class="s4">(</span><span class="s2">overlap_df</span><span class="s4">[</span><span class="s5">'measured_overlap_tokens'</span><span class="s4">].</span><span class="s2">mean</span><span class="s4">(), </span><span class="s6">2</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Min overlap: </span><span class="s3">{</span><span class="s2">overlap_df</span><span class="s4">[</span><span class="s5">'measured_overlap_tokens'</span><span class="s4">].</span><span class="s2">min</span><span class="s4">()</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Max overlap: </span><span class="s3">{</span><span class="s2">overlap_df</span><span class="s4">[</span><span class="s5">'measured_overlap_tokens'</span><span class="s4">].</span><span class="s2">max</span><span class="s4">()</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+    <span class="s2">display</span><span class="s4">(</span><span class="s2">overlap_df</span><span class="s4">.</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">))</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 16 – QA: Manual Spot Check Helper</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">def </span><span class="s2">preview_doc_chunks</span><span class="s4">(</span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">preview_chars</span><span class="s4">=</span><span class="s6">1200</span><span class="s4">):</span>
+    <span class="s2">chunks </span><span class="s4">= [</span><span class="s2">c </span><span class="s3">for </span><span class="s2">c </span><span class="s3">in </span><span class="s2">tagged_chunks </span><span class="s3">if </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">] == </span><span class="s2">file_name</span><span class="s4">]</span>
+    <span class="s3">if not </span><span class="s2">chunks</span><span class="s4">:</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;No chunks found for </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s3">return</span>
+
+    <span class="s2">positions </span><span class="s4">= [</span><span class="s6">0</span><span class="s4">, </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">)//</span><span class="s6">2</span><span class="s4">, </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">)-</span><span class="s6">1</span><span class="s4">]</span>
+    <span class="s2">seen </span><span class="s4">= </span><span class="s2">set</span><span class="s4">()</span>
+
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;</span><span class="s3">\n</span><span class="s5">Manual spot check for: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total chunks: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">)</span><span class="s3">}\n</span><span class="s5">&quot;</span><span class="s4">)</span>
+
+    <span class="s3">for </span><span class="s2">pos </span><span class="s3">in </span><span class="s2">positions</span><span class="s4">:</span>
+        <span class="s3">if </span><span class="s2">pos </span><span class="s3">in </span><span class="s2">seen</span><span class="s4">:</span>
+            <span class="s3">continue</span>
+        <span class="s2">seen</span><span class="s4">.</span><span class="s2">add</span><span class="s4">(</span><span class="s2">pos</span><span class="s4">)</span>
+        <span class="s2">c </span><span class="s4">= </span><span class="s2">chunks</span><span class="s4">[</span><span class="s2">pos</span><span class="s4">]</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;=&quot; </span><span class="s4">* </span><span class="s6">100</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Chunk index: </span><span class="s3">{</span><span class="s2">c</span><span class="s4">[</span><span class="s5">'chunk_index'</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Token count: </span><span class="s3">{</span><span class="s2">c</span><span class="s4">[</span><span class="s5">'token_count'</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Clause tags: </span><span class="s3">{</span><span class="s2">c</span><span class="s4">[</span><span class="s5">'clause_tags'</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Start char: </span><span class="s3">{</span><span class="s2">c</span><span class="s4">[</span><span class="s5">'start_char'</span><span class="s4">]</span><span class="s3">} </span><span class="s5">| End char: </span><span class="s3">{</span><span class="s2">c</span><span class="s4">[</span><span class="s5">'end_char'</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;-&quot; </span><span class="s4">* </span><span class="s6">100</span><span class="s4">)</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;chunk_text&quot;</span><span class="s4">][:</span><span class="s2">preview_chars</span><span class="s4">])</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 17 – QA: Manual Tag Validation Sample</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">tag_validation_sample </span><span class="s4">= </span><span class="s2">chunk_df</span><span class="s4">.</span><span class="s2">sample</span><span class="s4">(</span><span class="s2">min</span><span class="s4">(</span><span class="s6">15</span><span class="s4">, </span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunk_df</span><span class="s4">)), </span><span class="s2">random_state</span><span class="s4">=</span><span class="s6">42</span><span class="s4">)[</span>
+    <span class="s4">[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">, </span><span class="s5">&quot;clause_tags&quot;</span><span class="s4">, </span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_text&quot;</span><span class="s4">]</span>
+<span class="s4">].</span><span class="s2">copy</span><span class="s4">()</span>
+
+<span class="s2">display</span><span class="s4">(</span><span class="s2">tag_validation_sample</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 18 – QA: Parsing Failure Check</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">failed_docs_df </span><span class="s4">= </span><span class="s2">logs_df</span><span class="s4">[</span><span class="s2">logs_df</span><span class="s4">[</span><span class="s5">&quot;parse_success&quot;</span><span class="s4">] == </span><span class="s3">False</span><span class="s4">].</span><span class="s2">copy</span><span class="s4">()</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Number of failed documents: </span><span class="s3">{</span><span class="s2">len</span><span class="s4">(</span><span class="s2">failed_docs_df</span><span class="s4">)</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span><span class="s2">failed_docs_df</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 19 – QA: No Major Data Loss Check</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">data_loss_rows </span><span class="s4">= []</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">original_text </span><span class="s3">in </span><span class="s2">parsed_results</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s2">chunks </span><span class="s4">= </span><span class="s2">all_chunks</span><span class="s4">.</span><span class="s2">get</span><span class="s4">(</span><span class="s2">file_name</span><span class="s4">, [])</span>
+    <span class="s3">if not </span><span class="s2">chunks</span><span class="s4">:</span>
+        <span class="s3">continue</span>
+
+    <span class="s2">original_word_count </span><span class="s4">= </span><span class="s2">len</span><span class="s4">(</span><span class="s2">original_text</span><span class="s4">.</span><span class="s2">split</span><span class="s4">())</span>
+    <span class="s2">sum_chunk_words </span><span class="s4">= </span><span class="s2">sum</span><span class="s4">(</span><span class="s2">len</span><span class="s4">(</span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;text&quot;</span><span class="s4">].</span><span class="s2">split</span><span class="s4">()) </span><span class="s3">for </span><span class="s2">c </span><span class="s3">in </span><span class="s2">chunks</span><span class="s4">)</span>
+
+    <span class="s2">approx_overlap_total </span><span class="s4">= </span><span class="s2">max</span><span class="s4">(</span><span class="s2">len</span><span class="s4">(</span><span class="s2">chunks</span><span class="s4">) - </span><span class="s6">1</span><span class="s4">, </span><span class="s6">0</span><span class="s4">) * </span><span class="s6">175</span>
+    <span class="s2">approx_unique_words_from_chunks </span><span class="s4">= </span><span class="s2">sum_chunk_words </span><span class="s4">- </span><span class="s2">approx_overlap_total</span>
+
+    <span class="s2">ratio </span><span class="s4">= </span><span class="s2">round</span><span class="s4">(</span><span class="s2">approx_unique_words_from_chunks </span><span class="s4">/ </span><span class="s2">original_word_count</span><span class="s4">, </span><span class="s6">3</span><span class="s4">) </span><span class="s3">if </span><span class="s2">original_word_count </span><span class="s3">else </span><span class="s6">0</span>
+
+    <span class="s2">data_loss_rows</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+        <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+        <span class="s5">&quot;original_word_count&quot;</span><span class="s4">: </span><span class="s2">original_word_count</span><span class="s4">,</span>
+        <span class="s5">&quot;sum_chunk_words&quot;</span><span class="s4">: </span><span class="s2">sum_chunk_words</span><span class="s4">,</span>
+        <span class="s5">&quot;approx_unique_words_from_chunks&quot;</span><span class="s4">: </span><span class="s2">approx_unique_words_from_chunks</span><span class="s4">,</span>
+        <span class="s5">&quot;coverage_ratio&quot;</span><span class="s4">: </span><span class="s2">ratio</span>
+    <span class="s4">})</span>
+
+<span class="s2">data_loss_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">data_loss_rows</span><span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;No-data-loss sanity check&quot;</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span><span class="s2">data_loss_df</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># STEP 20 – Final Milestone 1 Summary</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">total_docs </span><span class="s4">= </span><span class="s2">len</span><span class="s4">(</span><span class="s2">corpus_results</span><span class="s4">)</span>
+<span class="s2">successful_docs </span><span class="s4">= </span><span class="s2">sum</span><span class="s4">(</span><span class="s6">1 </span><span class="s3">for </span><span class="s2">r </span><span class="s3">in </span><span class="s2">corpus_results </span><span class="s3">if </span><span class="s2">r</span><span class="s4">[</span><span class="s5">&quot;parse_success&quot;</span><span class="s4">])</span>
+<span class="s2">failed_docs </span><span class="s4">= </span><span class="s2">total_docs </span><span class="s4">- </span><span class="s2">successful_docs</span>
+<span class="s2">total_chunks </span><span class="s4">= </span><span class="s2">len</span><span class="s4">(</span><span class="s2">tagged_chunks</span><span class="s4">)</span>
+
+<span class="s3">if </span><span class="s2">total_chunks </span><span class="s4">&gt; </span><span class="s6">0</span><span class="s4">:</span>
+    <span class="s2">pct_in_range </span><span class="s4">= </span><span class="s2">round</span><span class="s4">((</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">].</span><span class="s2">between</span><span class="s4">(</span><span class="s6">800</span><span class="s4">, </span><span class="s6">1000</span><span class="s4">).</span><span class="s2">mean</span><span class="s4">()) * </span><span class="s6">100</span><span class="s4">, </span><span class="s6">2</span><span class="s4">)</span>
+<span class="s3">else</span><span class="s4">:</span>
+    <span class="s2">pct_in_range </span><span class="s4">= </span><span class="s6">0</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;MILESTONE 1 SUMMARY&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;=&quot; </span><span class="s4">* </span><span class="s6">50</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Documents processed: </span><span class="s3">{</span><span class="s2">total_docs</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Successful parses: </span><span class="s3">{</span><span class="s2">successful_docs</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Failed parses: </span><span class="s3">{</span><span class="s2">failed_docs</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Total tagged chunks: </span><span class="s3">{</span><span class="s2">total_chunks</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Percent of chunks in 800–1000 range: </span><span class="s3">{</span><span class="s2">pct_in_range</span><span class="s3">}</span><span class="s5">%&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;JSONL saved: </span><span class="s3">{</span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">'tagged_chunks.jsonl'</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;SQLite saved: </span><span class="s3">{</span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">'tagged_chunks.db'</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Logs saved: </span><span class="s3">{</span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">'processing_logs.csv'</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Error log saved: </span><span class="s3">{</span><span class="s2">OUTPUT_DIR </span><span class="s4">/ </span><span class="s5">'pipeline_errors.json'</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># DIAGNOSTIC 1 – classify out-of-range chunks</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">import </span><span class="s2">pandas </span><span class="s3">as </span><span class="s2">pd</span>
+
+<span class="s2">chunk_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">tagged_chunks</span><span class="s4">)</span>
+
+<span class="s3">def </span><span class="s2">size_bucket</span><span class="s4">(</span><span class="s2">token_count</span><span class="s4">):</span>
+    <span class="s3">if </span><span class="s2">token_count </span><span class="s4">&lt; </span><span class="s6">800</span><span class="s4">:</span>
+        <span class="s3">return </span><span class="s5">&quot;too_small&quot;</span>
+    <span class="s3">elif </span><span class="s2">token_count </span><span class="s4">&gt; </span><span class="s6">1000</span><span class="s4">:</span>
+        <span class="s3">return </span><span class="s5">&quot;too_large&quot;</span>
+    <span class="s3">else</span><span class="s4">:</span>
+        <span class="s3">return </span><span class="s5">&quot;in_range&quot;</span>
+
+<span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;size_bucket&quot;</span><span class="s4">] = </span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">].</span><span class="s2">apply</span><span class="s4">(</span><span class="s2">size_bucket</span><span class="s4">)</span>
+
+<span class="s2">summary </span><span class="s4">= (</span>
+    <span class="s2">chunk_df</span><span class="s4">.</span><span class="s2">groupby</span><span class="s4">([</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;size_bucket&quot;</span><span class="s4">])</span>
+    <span class="s4">.</span><span class="s2">size</span><span class="s4">()</span>
+    <span class="s4">.</span><span class="s2">unstack</span><span class="s4">(</span><span class="s2">fill_value</span><span class="s4">=</span><span class="s6">0</span><span class="s4">)</span>
+<span class="s4">)</span>
+
+<span class="s0"># make sure all expected columns exist</span>
+<span class="s3">for </span><span class="s2">col </span><span class="s3">in </span><span class="s4">[</span><span class="s5">&quot;too_small&quot;</span><span class="s4">, </span><span class="s5">&quot;too_large&quot;</span><span class="s4">, </span><span class="s5">&quot;in_range&quot;</span><span class="s4">]:</span>
+    <span class="s3">if </span><span class="s2">col </span><span class="s3">not in </span><span class="s2">summary</span><span class="s4">.</span><span class="s2">columns</span><span class="s4">:</span>
+        <span class="s2">summary</span><span class="s4">[</span><span class="s2">col</span><span class="s4">] = </span><span class="s6">0</span>
+
+<span class="s2">summary </span><span class="s4">= </span><span class="s2">summary</span><span class="s4">.</span><span class="s2">reset_index</span><span class="s4">()</span>
+
+<span class="s2">display</span><span class="s4">(</span>
+    <span class="s2">summary</span><span class="s4">.</span><span class="s2">sort_values</span><span class="s4">(</span><span class="s2">by</span><span class="s4">=[</span><span class="s5">&quot;too_small&quot;</span><span class="s4">, </span><span class="s5">&quot;too_large&quot;</span><span class="s4">], </span><span class="s2">ascending</span><span class="s4">=</span><span class="s3">False</span><span class="s4">)</span>
+<span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># DIAGNOSTIC 2 – show most extreme chunks</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">too_small_df </span><span class="s4">= </span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">] &lt; </span><span class="s6">800</span><span class="s4">].</span><span class="s2">copy</span><span class="s4">()</span>
+<span class="s2">too_large_df </span><span class="s4">= </span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s2">chunk_df</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">] &gt; </span><span class="s6">1000</span><span class="s4">].</span><span class="s2">copy</span><span class="s4">()</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Most undersized chunks:&quot;</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span>
+    <span class="s2">too_small_df</span><span class="s4">.</span><span class="s2">sort_values</span><span class="s4">(</span><span class="s5">&quot;token_count&quot;</span><span class="s4">)</span>
+    <span class="s4">[[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">, </span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s5">&quot;clause_tags&quot;</span><span class="s4">]]</span>
+    <span class="s4">.</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">)</span>
+<span class="s4">)</span>
+
+<span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">Most oversized chunks:&quot;</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span>
+    <span class="s2">too_large_df</span><span class="s4">.</span><span class="s2">sort_values</span><span class="s4">(</span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s2">ascending</span><span class="s4">=</span><span class="s3">False</span><span class="s4">)</span>
+    <span class="s4">[[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">, </span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">, </span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s5">&quot;clause_tags&quot;</span><span class="s4">]]</span>
+    <span class="s4">.</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">)</span>
+<span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># DIAGNOSTIC 3 – inspect specific bad chunks</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">def </span><span class="s2">inspect_chunk</span><span class="s4">(</span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">chunk_index</span><span class="s4">, </span><span class="s2">preview_chars</span><span class="s4">=</span><span class="s6">1800</span><span class="s4">):</span>
+    <span class="s2">matches </span><span class="s4">= [</span>
+        <span class="s2">c </span><span class="s3">for </span><span class="s2">c </span><span class="s3">in </span><span class="s2">tagged_chunks</span>
+        <span class="s3">if </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">] == </span><span class="s2">file_name </span><span class="s3">and </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">] == </span><span class="s2">chunk_index</span>
+    <span class="s4">]</span>
+
+    <span class="s3">if not </span><span class="s2">matches</span><span class="s4">:</span>
+        <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Chunk not found.&quot;</span><span class="s4">)</span>
+        <span class="s3">return</span>
+
+    <span class="s2">c </span><span class="s4">= </span><span class="s2">matches</span><span class="s4">[</span><span class="s6">0</span><span class="s4">]</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;=&quot; </span><span class="s4">* </span><span class="s6">100</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;File:&quot;</span><span class="s4">, </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;source_document&quot;</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Chunk index:&quot;</span><span class="s4">, </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Token count:&quot;</span><span class="s4">, </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Clause tags:&quot;</span><span class="s4">, </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;clause_tags&quot;</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;Out of range:&quot;</span><span class="s4">, </span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;-&quot; </span><span class="s4">* </span><span class="s6">100</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s2">c</span><span class="s4">[</span><span class="s5">&quot;chunk_text&quot;</span><span class="s4">][:</span><span class="s2">preview_chars</span><span class="s4">])</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">)</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># DIAGNOSTIC 4 – are final chunks causing most misses?</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s2">final_chunk_rows </span><span class="s4">= []</span>
+
+<span class="s3">for </span><span class="s2">file_name</span><span class="s4">, </span><span class="s2">chunks </span><span class="s3">in </span><span class="s2">all_chunks</span><span class="s4">.</span><span class="s2">items</span><span class="s4">():</span>
+    <span class="s3">if not </span><span class="s2">chunks</span><span class="s4">:</span>
+        <span class="s3">continue</span>
+    <span class="s2">last_chunk </span><span class="s4">= </span><span class="s2">chunks</span><span class="s4">[-</span><span class="s6">1</span><span class="s4">]</span>
+    <span class="s2">final_chunk_rows</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+        <span class="s5">&quot;source_document&quot;</span><span class="s4">: </span><span class="s2">file_name</span><span class="s4">,</span>
+        <span class="s5">&quot;chunk_index&quot;</span><span class="s4">: </span><span class="s2">last_chunk</span><span class="s4">[</span><span class="s5">&quot;chunk_index&quot;</span><span class="s4">],</span>
+        <span class="s5">&quot;token_count&quot;</span><span class="s4">: </span><span class="s2">last_chunk</span><span class="s4">[</span><span class="s5">&quot;token_count&quot;</span><span class="s4">],</span>
+        <span class="s5">&quot;out_of_range&quot;</span><span class="s4">: </span><span class="s2">last_chunk</span><span class="s4">[</span><span class="s5">&quot;out_of_range&quot;</span><span class="s4">]</span>
+    <span class="s4">})</span>
+
+<span class="s2">final_df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">final_chunk_rows</span><span class="s4">)</span>
+<span class="s2">display</span><span class="s4">(</span><span class="s2">final_df</span><span class="s4">.</span><span class="s2">sort_values</span><span class="s4">(</span><span class="s5">&quot;token_count&quot;</span><span class="s4">))</span>
+<span class="s0">#%% 
+# ──────────────────────────────────────────────</span>
+<span class="s0"># DIAGNOSTIC 5 – section sizes before chunking</span>
+<span class="s0"># ──────────────────────────────────────────────</span>
+
+<span class="s3">def </span><span class="s2">section_size_report</span><span class="s4">(</span><span class="s2">file_name</span><span class="s4">):</span>
+    <span class="s2">text </span><span class="s4">= </span><span class="s2">parsed_results</span><span class="s4">[</span><span class="s2">file_name</span><span class="s4">]</span>
+    <span class="s2">sections </span><span class="s4">= </span><span class="s2">split_into_sections</span><span class="s4">(</span><span class="s2">text</span><span class="s4">)</span>
+
+    <span class="s2">rows </span><span class="s4">= []</span>
+    <span class="s3">for </span><span class="s2">i</span><span class="s4">, </span><span class="s2">section </span><span class="s3">in </span><span class="s2">enumerate</span><span class="s4">(</span><span class="s2">sections</span><span class="s4">):</span>
+        <span class="s2">rows</span><span class="s4">.</span><span class="s2">append</span><span class="s4">({</span>
+            <span class="s5">&quot;section_index&quot;</span><span class="s4">: </span><span class="s2">i</span><span class="s4">,</span>
+            <span class="s5">&quot;token_count&quot;</span><span class="s4">: </span><span class="s2">count_tokens</span><span class="s4">(</span><span class="s2">section</span><span class="s4">),</span>
+            <span class="s5">&quot;preview&quot;</span><span class="s4">: </span><span class="s2">section</span><span class="s4">[:</span><span class="s6">150</span><span class="s4">].</span><span class="s2">replace</span><span class="s4">(</span><span class="s5">&quot;</span><span class="s3">\n</span><span class="s5">&quot;</span><span class="s4">, </span><span class="s5">&quot; &quot;</span><span class="s4">)</span>
+        <span class="s4">})</span>
+
+    <span class="s2">df </span><span class="s4">= </span><span class="s2">pd</span><span class="s4">.</span><span class="s2">DataFrame</span><span class="s4">(</span><span class="s2">rows</span><span class="s4">)</span>
+    <span class="s2">print</span><span class="s4">(</span><span class="s5">f&quot;Section report for: </span><span class="s3">{</span><span class="s2">file_name</span><span class="s3">}</span><span class="s5">&quot;</span><span class="s4">)</span>
+    <span class="s2">display</span><span class="s4">(</span><span class="s2">df</span><span class="s4">.</span><span class="s2">sort_values</span><span class="s4">(</span><span class="s5">&quot;token_count&quot;</span><span class="s4">, </span><span class="s2">ascending</span><span class="s4">=</span><span class="s3">False</span><span class="s4">).</span><span class="s2">head</span><span class="s4">(</span><span class="s6">20</span><span class="s4">))</span>
+<span class="s0">#%% 
+</span></pre>
+</body>
+</html>
