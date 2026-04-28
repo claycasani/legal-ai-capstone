@@ -23,5 +23,5 @@ milestone1_outputs/
 *.sqlite3
 data/
 models/
-training/payment_lora_*.jsonl
-training/payment_lora_*.json
+training/*_lora_*.jsonl
+training/*_lora_*.json
