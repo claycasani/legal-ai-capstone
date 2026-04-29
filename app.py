@@ -93,8 +93,9 @@ CSS = """
   box-shadow: 0 18px 44px rgba(22, 35, 55, 0.08);
 }
 .brief-header {
-  background: linear-gradient(135deg, #1c1208, #2d1f0e);
-  color: white;
+  background: #fff8f2;
+  border-top: 4px solid var(--brand);
+  color: var(--ink);
   padding: 26px 28px;
   display: flex;
   justify-content: space-between;
@@ -106,27 +107,28 @@ CSS = """
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #f5c98a;
+  color: var(--brand);
 }
 .brief-header h2 {
   margin: 0;
   font-size: 30px;
   line-height: 1.1;
-  color: white;
+  color: var(--ink);
 }
 .brief-subtitle {
   margin: 10px 0 0;
-  color: #e8d5c0;
+  color: var(--muted);
   max-width: 720px;
 }
 .brief-stamp {
   align-self: start;
-  border: 1px solid rgba(255,255,255,0.42);
+  border: 1px solid rgba(195, 110, 32, 0.4);
   border-radius: 999px;
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
+  color: var(--brand);
 }
 .brief-grid {
   display: grid;
@@ -360,6 +362,18 @@ button.primary {
     grid-column: auto;
   }
 }
+
+/* ── Override Gradio purple theme accent ────────────────── */
+:root {
+  --color-accent: #C36E20 !important;
+  --color-accent-soft: rgba(195, 110, 32, 0.15) !important;
+  --link-text-color: #C36E20 !important;
+  --link-text-color-hover: #8B4A10 !important;
+  --link-text-color-active: #8B4A10 !important;
+  --link-text-color-visited: #8B4A10 !important;
+  --border-color-accent: #C36E20 !important;
+}
+svg.upload-icon { color: #C36E20 !important; }
 
 /* ── Step Indicator ─────────────────────────────────────── */
 .step-bar {
@@ -879,11 +893,13 @@ with gr.Blocks(title=APP_TITLE) as demo:
         <div class="app-shell">
           <div class="hero">
             <div style="display:flex;align-items:center;gap:18px;">
-              <img src="/file=gavel-logo.png" alt="Gavel"
-                   style="height:72px;width:auto;object-fit:contain;"
+              <img src="/file=gavel-logo.png" alt=""
+                   style="height:72px;width:auto;object-fit:contain;display:block;"
                    onerror="this.style.display='none'">
               <div>
-                <h1>Gavel</h1>
+                <h1 style="display:flex;align-items:center;gap:10px;">
+                  <span style="font-size:32px;" aria-hidden="true">⚖️</span> Gavel
+                </h1>
                 <p>AI that explains contracts in plain English — upload a contract for a
                    plain-English brief, key clause breakdown, and source-backed Q&amp;A.</p>
               </div>
