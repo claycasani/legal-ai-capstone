@@ -519,7 +519,8 @@ def upload_contract(file):
 
     try:
         retriever = get_retriever()
-        uploaded = retriever.index_upload(file.name)
+        file_path = str(file) if isinstance(file, (str, Path)) else file.name
+        uploaded = retriever.index_upload(file_path)
         state = {
             "collection_name": uploaded.collection_name,
             "source_document": uploaded.source_document,
