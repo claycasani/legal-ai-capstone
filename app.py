@@ -723,7 +723,7 @@ def format_inline(text: str) -> str:
 
 
 def get_server_port() -> int:
-    configured = os.getenv("GRADIO_SERVER_PORT")
+    configured = os.getenv("GRADIO_SERVER_PORT") or os.getenv("PORT")
     if configured:
         return int(configured)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -815,8 +815,9 @@ with gr.Blocks(title=APP_TITLE) as demo:
 
 
 if __name__ == "__main__":
+    default_server = "0.0.0.0" if os.getenv("SPACE_ID") else "127.0.0.1"
     demo.launch(
-        server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"),
+        server_name=os.getenv("GRADIO_SERVER_NAME", default_server),
         server_port=get_server_port(),
         css=CSS,
         theme=gr.themes.Soft(),

@@ -1,5 +1,7 @@
+import json
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -111,18 +113,43 @@ class LocalLoraGenerator(Generator):
         adapter_path: str = DEFAULT_LORA_ADAPTER_PATH,
     ):
         from peft import PeftModel
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
-        tokenizer = AutoTokenizer.from_pretrained(base_model)
-        base = AutoModelForCausalLM.from_pretrained(base_model, device_map="auto")
+        adapter_path = str(adapter_path)
+        base_model = resolve_lora_base_model(adapter_path, base_model)
+
+        tokenizer_source = adapter_path if Path(adapter_path).exists() else base_model
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model_kwargs = {
+            "device_map": "auto",
+            "low_cpu_mem_usage": True,
+        }
+        if torch.cuda.is_available():
+            from transformers import BitsAndBytesConfig
+
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+        else:
+            model_kwargs["torch_dtype"] = "auto"
+
+        base = AutoModelForCausalLM.from_pretrained(base_model, **model_kwargs)
         model = PeftModel.from_pretrained(base, adapter_path)
+        model.eval()
         self.pipe = pipeline(
             "text-generation",
             model=model,
             tokenizer=tokenizer,
-            max_new_tokens=900,
+            max_new_tokens=int(os.getenv("LORA_MAX_NEW_TOKENS", "700")),
             temperature=0.2,
             do_sample=False,
+            return_full_text=False,
         )
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
@@ -146,13 +173,27 @@ def get_openai_client() -> OpenAI:
 
 
 def get_generator() -> Generator:
-    provider = os.getenv("GENERATION_PROVIDER", "openai").lower()
+    provider = os.getenv("GENERATION_PROVIDER")
+    if provider is None:
+        provider = "lora" if Path(os.getenv("LORA_ADAPTER_PATH", DEFAULT_LORA_ADAPTER_PATH)).exists() else "openai"
+    provider = provider.lower()
     if provider == "lora":
         return LocalLoraGenerator(
             base_model=os.getenv("BASE_MODEL", DEFAULT_LOCAL_GENERATION_MODEL),
             adapter_path=os.getenv("LORA_ADAPTER_PATH", DEFAULT_LORA_ADAPTER_PATH),
         )
     return OpenAIGenerator(get_openai_client())
+
+
+def resolve_lora_base_model(adapter_path: str, fallback: str) -> str:
+    config_path = Path(adapter_path) / "adapter_config.json"
+    if not config_path.exists():
+        return fallback
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return fallback
+    return config.get("base_model_name_or_path") or fallback
 
 
 class ContractAssistant:
