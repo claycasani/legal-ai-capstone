@@ -25,3 +25,5 @@ data/
 models/
 training/*_lora_*.jsonl
 training/*_lora_*.json
+training/lora_train*.jsonl
+training/lora_eval*.jsonl
