@@ -897,7 +897,6 @@ with gr.Blocks(title=APP_TITLE) as demo:
             gr.Image(
                 value=str(ROOT / "gavel-logo.png"),
                 show_label=False,
-                show_download_button=False,
                 container=False,
                 height=80,
                 elem_classes=["hero-logo"],
