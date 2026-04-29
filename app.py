@@ -361,6 +361,95 @@ button.primary {
     grid-column: auto;
   }
 }
+
+/* ── Step Indicator ─────────────────────────────────────── */
+.step-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 0 14px;
+  flex-wrap: wrap;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.step-item.done {
+  color: var(--ok-line);
+}
+.step-item.active {
+  color: var(--brand);
+}
+.step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+  background: transparent;
+}
+.step-item.done .step-num {
+  background: var(--ok-line);
+  border-color: var(--ok-line);
+  color: white;
+}
+.step-item.active .step-num {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+}
+.step-arrow {
+  color: var(--line);
+  font-size: 18px;
+  margin: 0 6px;
+  font-weight: 300;
+}
+
+/* ── Status Badge ────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.status-badge.ready {
+  background: var(--ok-bg);
+  border-color: var(--ok-line);
+  color: #1a6b50;
+}
+.status-badge.error {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: #8b1c2a;
+}
+.status-badge.waiting {
+  background: var(--soft);
+  border-color: var(--line);
+  color: var(--muted);
+}
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
 """
 
 
@@ -394,27 +483,56 @@ def get_runtime() -> tuple[ContractRetriever, ContractAssistant]:
     return get_retriever(), get_assistant()
 
 
+def _status_badge(message: str, kind: str = "waiting") -> str:
+    dot = '<span class="status-dot"></span>'
+    return f'<div class="status-badge {html.escape(kind)}">{dot}{html.escape(message)}</div>'
+
+
+def _step_bar(step: int) -> str:
+    labels = ["Upload Contract", "Analyze Document", "Ask Questions"]
+    items = []
+    for i, label in enumerate(labels, start=1):
+        if i < step:
+            cls, num = "done", "&#10003;"
+        elif i == step:
+            cls, num = "active", str(i)
+        else:
+            cls, num = "", str(i)
+        items.append(
+            f'<span class="step-item {cls}">'
+            f'<span class="step-num">{num}</span>{html.escape(label)}'
+            f"</span>"
+        )
+        if i < len(labels):
+            items.append('<span class="step-arrow">›</span>')
+    return f'<div class="step-bar">{"".join(items)}</div>'
+
+
 def upload_contract(file):
     if file is None:
-        return "Upload a PDF, DOCX, or HTML contract to begin.", None, preview_html()
+        return (
+            _step_bar(1),
+            _status_badge("Upload a PDF, DOCX, or HTML contract to begin.", "waiting"),
+            None,
+            preview_html(),
+        )
 
     try:
         retriever = get_retriever()
         uploaded = retriever.index_upload(file.name)
-        status = (
-            f"Ready: {uploaded.source_document}\n"
-            f"Indexed chunks: {uploaded.num_chunks}\n"
-            f"Temporary collection: {uploaded.collection_name}"
-        )
         state = {
             "collection_name": uploaded.collection_name,
             "source_document": uploaded.source_document,
         }
+        status = _status_badge(
+            f"Ready \u2014 {uploaded.source_document} loaded ({uploaded.num_chunks} sections indexed)",
+            "ready",
+        )
         preview = preview_html(uploaded.raw_text_preview, uploaded.source_document)
-        return status, state, preview
+        return _step_bar(2), status, state, preview
     except Exception as exc:
         traceback.print_exc()
-        return f"Upload failed: {exc}", None, ""
+        return _step_bar(1), _status_badge(f"Upload failed: {exc}", "error"), None, ""
 
 
 def require_document(doc_state):
@@ -755,13 +873,15 @@ def get_server_port() -> int | None:
 with gr.Blocks(title=APP_TITLE) as demo:
     doc_state = gr.State()
 
+    # ── Hero ──────────────────────────────────────────────────
     gr.HTML(
         """
         <div class="app-shell">
           <div class="hero">
             <div>
               <h1>Contract Clarity</h1>
-              <p>Upload a contract and get a flyer-style brief with plain-English explanations, warning callouts, key clauses, and source-backed answers.</p>
+              <p>Upload a contract and get a flyer-style brief with plain-English explanations,
+                 warning callouts, key clauses, and source-backed answers.</p>
             </div>
             <div class="hero-badge">Consumer Contract Review</div>
           </div>
@@ -769,6 +889,7 @@ with gr.Blocks(title=APP_TITLE) as demo:
         """
     )
 
+    # ── Upload Row ────────────────────────────────────────────
     with gr.Row(elem_classes=["app-shell", "control-strip"]):
         with gr.Column(scale=4):
             file_input = gr.File(
@@ -776,62 +897,77 @@ with gr.Blocks(title=APP_TITLE) as demo:
                 file_types=[".pdf", ".docx", ".html", ".htm"],
             )
         with gr.Column(scale=1, min_width=170):
-            upload_button = gr.Button("Process", variant="primary")
+            upload_button = gr.Button("Process Contract", variant="primary")
 
+    # ── Step indicator + status ───────────────────────────────
     with gr.Row(elem_classes=["app-shell"]):
-        upload_status = gr.Textbox(
-            label="Status",
-            lines=4,
-            interactive=False,
-            elem_classes=["status-box"],
+        with gr.Column():
+            step_indicator = gr.HTML(_step_bar(1))
+            upload_status = gr.HTML(
+                _status_badge("Upload a contract above to begin.", "waiting")
+            )
+
+    # ── Accordion: Contract Brief ─────────────────────────────
+    with gr.Accordion("Contract Brief", open=False, elem_classes=["app-shell"]):
+        summary_button = gr.Button("Generate Flyer Brief", variant="primary")
+        brief_output = gr.HTML(
+            render_empty_brief(
+                "Flyer Brief",
+                "Upload a contract, then click Generate Flyer Brief.",
+            )
         )
 
-    with gr.Row(elem_classes=["app-shell"]):
-        with gr.Column(scale=8):
-            with gr.Row():
-                summary_button = gr.Button("Generate Flyer Brief", variant="primary")
-                clauses_button = gr.Button("Clause Watchlist")
-            brief_output = gr.HTML(
-                render_empty_brief(
-                    "Flyer Brief",
-                    "Upload a contract, then generate a polished one-page review.",
-                ),
-                elem_classes=["flyer-output"],
+    # ── Accordion: Clause Watchlist ───────────────────────────
+    with gr.Accordion("Clause Watchlist", open=False, elem_classes=["app-shell"]):
+        clauses_button = gr.Button("Extract Key Clauses", variant="primary")
+        clauses_output = gr.HTML(
+            render_empty_brief(
+                "Clause Watchlist",
+                "Upload a contract, then click Extract Key Clauses.",
             )
-        with gr.Column(scale=3):
-            gr.HTML(
-                """
-                <div class="qa-panel">
-                  <h3 class="side-title">Ask The Contract</h3>
-                  <p style="color: var(--muted); margin-top: 0;">Ask follow-up questions and get answers grounded in the uploaded document.</p>
-                </div>
-                """
-            )
-            question_box = gr.Textbox(
-                label="Question",
-                placeholder="What should I watch out for before signing?",
-                lines=4,
-            )
-            ask_button = gr.Button("Ask Question", variant="primary")
-            answer_output = gr.HTML(
-                render_empty_brief("Question Box", "Your answer will appear here as a mini brief."),
-            )
-            preview_output = gr.HTML(preview_html())
-            gr.HTML(
-                """
-                <p class="disclaimer">
-                  This tool explains contract text in plain English. It does not provide legal advice or replace an attorney.
-                </p>
-                """
-            )
+        )
 
+    # ── Accordion: Ask the Contract ───────────────────────────
+    with gr.Accordion("Ask the Contract", open=False, elem_classes=["app-shell"]):
+        gr.HTML(
+            '<p style="color: var(--muted); margin: 0 0 10px;">'
+            "Ask follow-up questions and get answers grounded in the uploaded document."
+            "</p>"
+        )
+        question_box = gr.Textbox(
+            label="Your question",
+            placeholder="What should I watch out for before signing?",
+            lines=3,
+        )
+        ask_button = gr.Button("Ask Question", variant="primary")
+        answer_output = gr.HTML(
+            render_empty_brief("Question Box", "Your answer will appear here.")
+        )
+
+    # ── Accordion: Document Preview ───────────────────────────
+    with gr.Accordion("Document Preview", open=False, elem_classes=["app-shell"]):
+        preview_output = gr.HTML(preview_html())
+
+    # ── Disclaimer ────────────────────────────────────────────
+    gr.HTML(
+        """
+        <div class="app-shell">
+          <p class="disclaimer" style="padding: 10px 0 20px;">
+            This tool explains contract text in plain English.
+            It does not provide legal advice or replace an attorney.
+          </p>
+        </div>
+        """
+    )
+
+    # ── Event wiring ──────────────────────────────────────────
     upload_button.click(
         fn=upload_contract,
         inputs=[file_input],
-        outputs=[upload_status, doc_state, preview_output],
+        outputs=[step_indicator, upload_status, doc_state, preview_output],
     )
     summary_button.click(fn=summarize_contract, inputs=[doc_state], outputs=[brief_output])
-    clauses_button.click(fn=extract_key_clauses, inputs=[doc_state], outputs=[brief_output])
+    clauses_button.click(fn=extract_key_clauses, inputs=[doc_state], outputs=[clauses_output])
     ask_button.click(fn=ask_question, inputs=[question_box, doc_state], outputs=[answer_output])
 
 
