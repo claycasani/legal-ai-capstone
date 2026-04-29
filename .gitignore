@@ -28,3 +28,9 @@ training/*_lora_*.jsonl
 training/*_lora_*.json
 training/lora_train*.jsonl
 training/lora_eval*.jsonl
+
+# Claude Code worktrees
+.claude/
+
+# LoRA adapter (tracked explicitly via git add -f)
+!models/contract-clarity-lora/
