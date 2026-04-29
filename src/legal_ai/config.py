@@ -8,7 +8,7 @@ UPLOAD_DB_DIR = DATA_DIR / "uploaded_chroma"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 OPENAI_CHAT_MODEL = "gpt-4.1-mini"
 
-DEFAULT_LOCAL_GENERATION_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_LOCAL_GENERATION_MODEL = "Qwen/Qwen2.5-3B-Instruct"
 DEFAULT_LORA_ADAPTER_PATH = "models/contract-clarity-lora"
 
 SUMMARY_QUERIES = [
