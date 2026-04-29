@@ -143,10 +143,12 @@ class LocalLoraGenerator(Generator):
         if torch.cuda.is_available():
             from transformers import BitsAndBytesConfig
 
+            # Use float16 — T4/A10G support it; bfloat16 is A100/H100 only
+            model_kwargs["torch_dtype"] = torch.float16
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_compute_dtype=torch.float16,
             )
         else:
             model_kwargs["torch_dtype"] = "auto"
