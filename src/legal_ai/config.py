@@ -1,6 +1,6 @@
 from pathlib import Path
 
-APP_TITLE = "Contract Clarity"
+APP_TITLE = "Gavel"
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 UPLOAD_DB_DIR = DATA_DIR / "uploaded_chroma"

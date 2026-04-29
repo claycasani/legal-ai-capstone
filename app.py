@@ -19,8 +19,8 @@ load_dotenv()
 
 CSS = """
 :root {
-  --brand: #164c8f;
-  --brand-dark: #0f315d;
+  --brand: #C36E20;
+  --brand-dark: #8B4A10;
   --accent: #2aa198;
   --ink: #182233;
   --muted: #5c6677;
@@ -37,8 +37,7 @@ CSS = """
 .gradio-container {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
-  background:
-    linear-gradient(180deg, #eef3f8 0%, #f8fafc 42%, #ffffff 100%);
+  background: linear-gradient(180deg, #fdf5ec 0%, #fdf9f5 42%, #ffffff 100%);
 }
 .app-shell {
   max-width: 1240px;
@@ -46,7 +45,7 @@ CSS = """
 }
 .hero {
   padding: 18px 0 14px;
-  border-bottom: 1px solid rgba(22, 76, 143, 0.16);
+  border-bottom: 1px solid rgba(195, 110, 32, 0.2);
   margin-bottom: 16px;
   display: flex;
   align-items: end;
@@ -66,9 +65,9 @@ CSS = """
   max-width: 760px;
 }
 .hero-badge {
-  border: 1px solid rgba(42, 161, 152, 0.35);
-  background: #ecfbf8;
-  color: #0e665f;
+  border: 1px solid rgba(195, 110, 32, 0.35);
+  background: #fdf0e0;
+  color: #8B4A10;
   padding: 8px 12px;
   font-weight: 700;
   font-size: 12px;
@@ -94,7 +93,7 @@ CSS = """
   box-shadow: 0 18px 44px rgba(22, 35, 55, 0.08);
 }
 .brief-header {
-  background: linear-gradient(135deg, var(--brand-dark), var(--brand));
+  background: linear-gradient(135deg, #1c1208, #2d1f0e);
   color: white;
   padding: 26px 28px;
   display: flex;
@@ -107,7 +106,7 @@ CSS = """
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #bfe5ff;
+  color: #f5c98a;
 }
 .brief-header h2 {
   margin: 0;
@@ -117,7 +116,7 @@ CSS = """
 }
 .brief-subtitle {
   margin: 10px 0 0;
-  color: #d8e8f7;
+  color: #e8d5c0;
   max-width: 720px;
 }
 .brief-stamp {
@@ -879,10 +878,15 @@ with gr.Blocks(title=APP_TITLE) as demo:
         """
         <div class="app-shell">
           <div class="hero">
-            <div>
-              <h1>Contract Clarity</h1>
-              <p>Upload a contract and get a flyer-style brief with plain-English explanations,
-                 warning callouts, key clauses, and source-backed answers.</p>
+            <div style="display:flex;align-items:center;gap:18px;">
+              <img src="/file=gavel-logo.png" alt="Gavel"
+                   style="height:72px;width:auto;object-fit:contain;"
+                   onerror="this.style.display='none'">
+              <div>
+                <h1>Gavel</h1>
+                <p>AI that explains contracts in plain English — upload a contract for a
+                   plain-English brief, key clause breakdown, and source-backed Q&amp;A.</p>
+              </div>
             </div>
             <div class="hero-badge">Consumer Contract Review</div>
           </div>
@@ -908,46 +912,44 @@ with gr.Blocks(title=APP_TITLE) as demo:
                 _status_badge("Upload a contract above to begin.", "waiting")
             )
 
-    # ── Accordion: Contract Brief ─────────────────────────────
-    with gr.Accordion("Contract Brief", open=False, elem_classes=["app-shell"]):
-        summary_button = gr.Button("Generate Flyer Brief", variant="primary")
-        brief_output = gr.HTML(
-            render_empty_brief(
-                "Flyer Brief",
-                "Upload a contract, then click Generate Flyer Brief.",
+    # ── Tabs ──────────────────────────────────────────────────
+    with gr.Tabs(elem_classes=["app-shell"]):
+        with gr.Tab("Contract Brief"):
+            summary_button = gr.Button("Generate Flyer Brief", variant="primary")
+            brief_output = gr.HTML(
+                render_empty_brief(
+                    "Flyer Brief",
+                    "Upload a contract, then click Generate Flyer Brief.",
+                )
             )
-        )
 
-    # ── Accordion: Clause Watchlist ───────────────────────────
-    with gr.Accordion("Clause Watchlist", open=False, elem_classes=["app-shell"]):
-        clauses_button = gr.Button("Extract Key Clauses", variant="primary")
-        clauses_output = gr.HTML(
-            render_empty_brief(
-                "Clause Watchlist",
-                "Upload a contract, then click Extract Key Clauses.",
+        with gr.Tab("Clause Watchlist"):
+            clauses_button = gr.Button("Extract Key Clauses", variant="primary")
+            clauses_output = gr.HTML(
+                render_empty_brief(
+                    "Clause Watchlist",
+                    "Upload a contract, then click Extract Key Clauses.",
+                )
             )
-        )
 
-    # ── Accordion: Ask the Contract ───────────────────────────
-    with gr.Accordion("Ask the Contract", open=False, elem_classes=["app-shell"]):
-        gr.HTML(
-            '<p style="color: var(--muted); margin: 0 0 10px;">'
-            "Ask follow-up questions and get answers grounded in the uploaded document."
-            "</p>"
-        )
-        question_box = gr.Textbox(
-            label="Your question",
-            placeholder="What should I watch out for before signing?",
-            lines=3,
-        )
-        ask_button = gr.Button("Ask Question", variant="primary")
-        answer_output = gr.HTML(
-            render_empty_brief("Question Box", "Your answer will appear here.")
-        )
+        with gr.Tab("Ask the Contract"):
+            gr.HTML(
+                '<p style="color: var(--muted); margin: 0 0 10px;">'
+                "Ask follow-up questions and get answers grounded in the uploaded document."
+                "</p>"
+            )
+            question_box = gr.Textbox(
+                label="Your question",
+                placeholder="What should I watch out for before signing?",
+                lines=3,
+            )
+            ask_button = gr.Button("Ask Question", variant="primary")
+            answer_output = gr.HTML(
+                render_empty_brief("Question Box", "Your answer will appear here.")
+            )
 
-    # ── Accordion: Document Preview ───────────────────────────
-    with gr.Accordion("Document Preview", open=False, elem_classes=["app-shell"]):
-        preview_output = gr.HTML(preview_html())
+        with gr.Tab("Document Preview"):
+            preview_output = gr.HTML(preview_html())
 
     # ── Disclaimer ────────────────────────────────────────────
     gr.HTML(
@@ -979,4 +981,5 @@ if __name__ == "__main__":
         server_port=get_server_port(),
         css=CSS,
         theme=gr.themes.Soft(),
+        allowed_paths=[str(ROOT)],
     )

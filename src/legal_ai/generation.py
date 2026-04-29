@@ -192,10 +192,13 @@ def get_generator() -> Generator:
         provider = "lora" if Path(os.getenv("LORA_ADAPTER_PATH", DEFAULT_LORA_ADAPTER_PATH)).exists() else "openai"
     provider = provider.lower()
     if provider == "lora":
-        return LocalLoraGenerator(
-            base_model=os.getenv("BASE_MODEL", DEFAULT_LOCAL_GENERATION_MODEL),
-            adapter_path=os.getenv("LORA_ADAPTER_PATH", DEFAULT_LORA_ADAPTER_PATH),
-        )
+        try:
+            return LocalLoraGenerator(
+                base_model=os.getenv("BASE_MODEL", DEFAULT_LOCAL_GENERATION_MODEL),
+                adapter_path=os.getenv("LORA_ADAPTER_PATH", DEFAULT_LORA_ADAPTER_PATH),
+            )
+        except Exception as exc:
+            print(f"[Gavel] LoRA load failed ({exc}), falling back to OpenAI.", flush=True)
     return OpenAIGenerator(get_openai_client())
 
 
