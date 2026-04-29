@@ -363,6 +363,10 @@ button.primary {
   }
 }
 
+/* ── Logo image: strip Gradio component chrome ──────────── */
+.hero-logo img { object-fit: contain !important; }
+.hero-logo > div { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
+
 /* ── Override Gradio purple theme accent ────────────────── */
 :root {
   --color-accent: #C36E20 !important;
@@ -888,27 +892,29 @@ with gr.Blocks(title=APP_TITLE) as demo:
     doc_state = gr.State()
 
     # ── Hero ──────────────────────────────────────────────────
-    gr.HTML(
-        """
-        <div class="app-shell">
-          <div class="hero">
-            <div style="display:flex;align-items:center;gap:18px;">
-              <img src="/file=gavel-logo.png" alt=""
-                   style="height:72px;width:auto;object-fit:contain;display:block;"
-                   onerror="this.style.display='none'">
-              <div>
-                <h1 style="display:flex;align-items:center;gap:10px;">
-                  <span style="font-size:32px;" aria-hidden="true">⚖️</span> Gavel
-                </h1>
-                <p>AI that explains contracts in plain English — upload a contract for a
-                   plain-English brief, key clause breakdown, and source-backed Q&amp;A.</p>
-              </div>
-            </div>
-            <div class="hero-badge">Consumer Contract Review</div>
-          </div>
-        </div>
-        """
-    )
+    with gr.Row(elem_classes=["app-shell"], equal_height=True):
+        with gr.Column(scale=0, min_width=90):
+            gr.Image(
+                value=str(ROOT / "gavel-logo.png"),
+                show_label=False,
+                show_download_button=False,
+                container=False,
+                height=80,
+                elem_classes=["hero-logo"],
+            )
+        with gr.Column():
+            gr.HTML(
+                """
+                <div class="hero">
+                  <div>
+                    <h1>Gavel</h1>
+                    <p>AI that explains contracts in plain English — upload a contract for a
+                       plain-English brief, key clause breakdown, and source-backed Q&amp;A.</p>
+                  </div>
+                  <div class="hero-badge">Consumer Contract Review</div>
+                </div>
+                """
+            )
 
     # ── Upload Row ────────────────────────────────────────────
     with gr.Row(elem_classes=["app-shell", "control-strip"]):
@@ -996,6 +1002,6 @@ if __name__ == "__main__":
         server_name=os.getenv("GRADIO_SERVER_NAME", default_server),
         server_port=get_server_port(),
         css=CSS,
-        theme=gr.themes.Soft(),
+        theme=gr.themes.Soft(primary_hue="orange", secondary_hue="orange"),
         allowed_paths=[str(ROOT)],
     )
