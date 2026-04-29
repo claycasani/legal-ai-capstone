@@ -1,3 +1,14 @@
+---
+title: Contract Clarity
+emoji: 📄
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: "6.5.1"
+app_file: app.py
+pinned: false
+---
+
 # Contract Clarity
 
 Contract Clarity is a capstone MVP for helping everyday users understand legal
