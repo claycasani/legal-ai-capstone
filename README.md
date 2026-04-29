@@ -35,7 +35,7 @@ After training a LoRA adapter, switch generation to the local fine-tuned model:
 
 ```bash
 GENERATION_PROVIDER=lora \
-BASE_MODEL=Qwen/Qwen2.5-7B-Instruct \
+BASE_MODEL=Qwen/Qwen2.5-3B-Instruct \
 LORA_ADAPTER_PATH=models/contract-clarity-lora \
 python app.py
 ```
@@ -60,3 +60,15 @@ and `evaluation/`. Add `OPENAI_API_KEY` as a Space secret.
 
 GPU deployment is only needed when running `GENERATION_PROVIDER=lora` with a
 local adapter. The default OpenAI mode can run on CPU.
+
+For a live LoRA demo Space, upload `models/contract-clarity-lora` and set:
+
+```text
+GENERATION_PROVIDER=lora
+BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
+LORA_ADAPTER_PATH=models/contract-clarity-lora
+OPENAI_API_KEY=<Space secret>
+```
+
+After the demo, pause the Space or switch the hardware back to CPU Basic to stop
+GPU billing.

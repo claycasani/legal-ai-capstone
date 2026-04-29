@@ -1,10 +1,15 @@
 beautifulsoup4
+accelerate
+bitsandbytes
 chromadb
 gradio
 lxml
 openai
 pandas
+peft
 pymupdf
 python-docx
 python-dotenv
 tiktoken
+torch
+transformers

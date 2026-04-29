@@ -22,6 +22,7 @@ milestone1_outputs/
 *.sqlite
 *.sqlite3
 data/
+dist/
 models/
 training/*_lora_*.jsonl
 training/*_lora_*.json

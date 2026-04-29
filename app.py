@@ -1,8 +1,8 @@
 import html
 import os
 import re
-import socket
 import sys
+import traceback
 from pathlib import Path
 
 import gradio as gr
@@ -364,7 +364,23 @@ button.primary {
 """
 
 
-runtime: tuple[ContractRetriever, ContractAssistant] | None = None
+retriever_runtime: ContractRetriever | None = None
+assistant_runtime: ContractAssistant | None = None
+
+
+def get_retriever() -> ContractRetriever:
+    global retriever_runtime
+    if retriever_runtime is None:
+        client = get_openai_client()
+        retriever_runtime = ContractRetriever(client)
+    return retriever_runtime
+
+
+def get_assistant() -> ContractAssistant:
+    global assistant_runtime
+    if assistant_runtime is None:
+        assistant_runtime = ContractAssistant(retriever=get_retriever(), generator=get_generator())
+    return assistant_runtime
 
 
 def build_runtime() -> tuple[ContractRetriever, ContractAssistant]:
@@ -375,10 +391,7 @@ def build_runtime() -> tuple[ContractRetriever, ContractAssistant]:
 
 
 def get_runtime() -> tuple[ContractRetriever, ContractAssistant]:
-    global runtime
-    if runtime is None:
-        runtime = build_runtime()
-    return runtime
+    return get_retriever(), get_assistant()
 
 
 def upload_contract(file):
@@ -386,7 +399,7 @@ def upload_contract(file):
         return "Upload a PDF, DOCX, or HTML contract to begin.", None, preview_html()
 
     try:
-        retriever, _assistant = get_runtime()
+        retriever = get_retriever()
         uploaded = retriever.index_upload(file.name)
         status = (
             f"Ready: {uploaded.source_document}\n"
@@ -400,6 +413,7 @@ def upload_contract(file):
         preview = preview_html(uploaded.raw_text_preview, uploaded.source_document)
         return status, state, preview
     except Exception as exc:
+        traceback.print_exc()
         return f"Upload failed: {exc}", None, ""
 
 
@@ -416,8 +430,11 @@ def summarize_contract(doc_state):
     missing = require_document(doc_state)
     if missing:
         return missing
-    _retriever, assistant = get_runtime()
-    result = assistant.summarize(doc_state["collection_name"], doc_state["source_document"])
+    try:
+        result = get_assistant().summarize(doc_state["collection_name"], doc_state["source_document"])
+    except Exception as exc:
+        traceback.print_exc()
+        return render_empty_brief("Generation Failed", str(exc))
     return render_brief(
         "Contract Brief",
         doc_state["source_document"],
@@ -430,8 +447,11 @@ def extract_key_clauses(doc_state):
     missing = require_document(doc_state)
     if missing:
         return missing
-    _retriever, assistant = get_runtime()
-    result = assistant.key_clauses(doc_state["collection_name"], doc_state["source_document"])
+    try:
+        result = get_assistant().key_clauses(doc_state["collection_name"], doc_state["source_document"])
+    except Exception as exc:
+        traceback.print_exc()
+        return render_empty_brief("Generation Failed", str(exc))
     return render_clause_watchlist(doc_state["source_document"], result)
 
 
@@ -439,8 +459,11 @@ def ask_question(question, doc_state):
     missing = require_document(doc_state)
     if missing:
         return missing
-    _retriever, assistant = get_runtime()
-    result = assistant.answer_question(question, doc_state["collection_name"], doc_state["source_document"])
+    try:
+        result = get_assistant().answer_question(question, doc_state["collection_name"], doc_state["source_document"])
+    except Exception as exc:
+        traceback.print_exc()
+        return render_empty_brief("Generation Failed", str(exc))
     return render_brief(
         "Question Answer",
         doc_state["source_document"],
@@ -722,13 +745,11 @@ def format_inline(text: str) -> str:
     return safe
 
 
-def get_server_port() -> int:
+def get_server_port() -> int | None:
     configured = os.getenv("GRADIO_SERVER_PORT") or os.getenv("PORT")
     if configured:
         return int(configured)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+    return None
 
 
 with gr.Blocks(title=APP_TITLE) as demo:

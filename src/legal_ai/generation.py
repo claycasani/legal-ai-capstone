@@ -112,15 +112,27 @@ class LocalLoraGenerator(Generator):
         base_model: str = DEFAULT_LOCAL_GENERATION_MODEL,
         adapter_path: str = DEFAULT_LORA_ADAPTER_PATH,
     ):
-        from peft import PeftModel
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-
         adapter_path = str(adapter_path)
+        if not Path(adapter_path).exists():
+            raise FileNotFoundError(
+                "LoRA generation is enabled, but the adapter folder was not found at "
+                f"{adapter_path}. Upload models/contract-clarity-lora to the Space or "
+                "set GENERATION_PROVIDER=openai."
+            )
+
+        try:
+            from peft import PeftModel
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+        except ImportError as exc:
+            raise ImportError(
+                "LoRA generation requires peft, torch, transformers, accelerate, and "
+                "bitsandbytes. Install requirements.txt before starting the app."
+            ) from exc
+
         base_model = resolve_lora_base_model(adapter_path, base_model)
 
-        tokenizer_source = adapter_path if Path(adapter_path).exists() else base_model
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
+        tokenizer = AutoTokenizer.from_pretrained(adapter_path)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
